@@ -7,7 +7,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
   publish:
@@ -30,5 +29,5 @@ jobs:
       - name: Pack
         run: dotnet pack -c Release -o ./nupkg --no-build
 
-      - name: Publish to NuGet (Trusted Publishing)
-        run: dotnet nuget push ./nupkg/*.nupkg --source https://api.nuget.org/v3/index.json --skip-duplicate
+      - name: Publish to NuGet
+        run: dotnet nuget push ./nupkg/*.nupkg --api-key "${{ secrets.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
