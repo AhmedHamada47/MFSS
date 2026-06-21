@@ -1,9 +1,9 @@
 ﻿name: Publish to NuGet
 
 on:
+  workflow_dispatch:
   release:
     types: [published]
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -31,4 +31,4 @@ jobs:
         run: dotnet pack -c Release -o ./nupkg --no-build
 
       - name: Publish to NuGet (Trusted Publishing)
-        run: dotnet nuget push ./nupkg/*.nupkg --source https://api.nuget.org/v3/index.json --skip-duplicate --no-symbols true
+        run: dotnet nuget push ./nupkg/*.nupkg --source https://api.nuget.org/v3/index.json --skip-duplicate
