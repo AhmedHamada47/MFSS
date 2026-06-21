@@ -1,0 +1,24 @@
+﻿# Secrets - NEVER commit
+appsettings.json
+appsettings.*.json
+!appsettings.template.json
+
+# Build
+bin/
+obj/
+nupkg/
+TestResults/
+
+# IDE
+.vs/
+.vscode/
+*.user
+*.suo
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Logs
+*.log
+*.csv

@@ -1,0 +1,42 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>MFSS</RootNamespace>
+
+    <!-- NuGet Tool Config -->
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>mfss</ToolCommandName>
+
+    <!-- NuGet Package Info -->
+    <PackageId>MFSS</PackageId>
+    <Version>4.2.0</Version>
+    <Authors>Ahmed Hamada</Authors>
+    <Company>Ahmed Hamada</Company>
+    <Description>Migration File Storage System - Migrate files between any cloud storage provider (Cloudflare R2, AWS S3, Azure Blob, Google Cloud, Local) with database tracking, retry, rollback, and zero data loss.</Description>
+    <PackageTags>migration;storage;s3;r2;azure;google-cloud;cloudflare;file-transfer;cloud-migration;dotnet-tool</PackageTags>
+    <PackageProjectUrl>https://github.com/Ahmed-Hamada0/MFSS</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/Ahmed-Hamada0/MFSS</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <Copyright>Copyright (c) 2026 Ahmed Hamada</Copyright>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="AWSSDK.S3" Version="4.*" />
+    <PackageReference Include="System.Data.SqlClient" Version="4.*" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" Version="10.*" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.*" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="10.*" />
+    <PackageReference Include="System.Threading.RateLimiting" Version="10.*" />
+    <PackageReference Include="System.CommandLine" Version="2.0.0-beta4.22272.1" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+    <None Update="appsettings.template.json"><CopyToOutputDirectory>Always</CopyToOutputDirectory></None>
+  </ItemGroup>
+</Project>
+
+
