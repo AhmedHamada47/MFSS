@@ -1,6 +1,6 @@
 namespace MFSS.Services;
 
-public class Logger
+public class Logger : IDisposable
 {
     private readonly string _migrationName;
     private readonly string _logPath;
@@ -30,5 +30,10 @@ public class Logger
         Console.WriteLine(msg);
         Console.ForegroundColor = prev;
         _writer.WriteLine($"[{DateTime.Now:HH:mm:ss}] {msg}");
+    }
+
+    public void Dispose()
+    {
+        _writer.Dispose();
     }
 }

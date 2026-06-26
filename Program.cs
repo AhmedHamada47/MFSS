@@ -168,7 +168,7 @@ root.SetHandler(async (bool dryRun, string mode) =>
                 return;
             }
 
-            for (int attempt = 0; attempt <= settings.MaxRetries; attempt++)
+            for (int attempt = 0; attempt < settings.MaxRetries; attempt++)
             {
                 try
                 {

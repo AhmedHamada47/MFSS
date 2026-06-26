@@ -152,8 +152,7 @@ public class DestinationDbService
             {
                 var sql = $@"INSERT INTO `{SanitizeTableName(logTable)}` 
                     (SourceId, SourceTable, SourceUrl, Status) 
-                    VALUES (@sourceId, @sourceTable, @sourceUrl, 'pending')
-                    ON DUPLICATE KEY UPDATE SourceId = SourceId";
+                    VALUES (@sourceId, @sourceTable, @sourceUrl, 'pending')";
 
                 using var cmd = new MySqlCommand(sql, conn);
                 cmd.Parameters.AddWithValue("@sourceId", record.Id);
@@ -196,6 +195,10 @@ public class DestinationDbService
 
         return results;
     }
+
+    /// <summary>
+    /// Gets pending records by log table primary key Id (used for MarkSuccess/MarkFailed).
+    /// </summary>
 
     /// <summary>
     /// Gets all pending records across all log tables for the given source tables.

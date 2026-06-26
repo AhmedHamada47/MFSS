@@ -26,6 +26,11 @@ public class SourceDbService
 
         foreach (var table in tables)
         {
+            // Validate table/column names to prevent SQL injection (only allow alphanumeric + underscore)
+            ValidateName(table.TableName);
+            ValidateName(table.IdColumn);
+            ValidateName(table.UrlColumn);
+
             var sql = $@"SELECT `{table.IdColumn}` AS Id, `{table.UrlColumn}` AS Url 
                          FROM `{table.TableName}` 
                          WHERE `{table.UrlColumn}` IS NOT NULL AND `{table.UrlColumn}` != ''";
@@ -45,5 +50,11 @@ public class SourceDbService
         }
 
         return results;
+    }
+
+    private static void ValidateName(string name)
+    {
+        if (string.IsNullOrEmpty(name) || !name.All(c => char.IsLetterOrDigit(c) || c == '_'))
+            throw new ArgumentException($"Invalid identifier name: '{name}'. Only alphanumeric characters and underscores are allowed.");
     }
 }
