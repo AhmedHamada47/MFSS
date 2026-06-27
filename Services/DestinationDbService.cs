@@ -160,9 +160,10 @@ public class DestinationDbService
             {
                 foreach (var record in group)
                 {
-                    // INSERT with ON DUPLICATE KEY UPDATE to track URL changes.
-                    // New records are inserted as 'pending'. Existing records get their SourceUrl updated
-                    // (URL change detection is handled separately by DetectAndResetUrlChanges).
+                    // INSERT with ON DUPLICATE KEY UPDATE to keep SourceUrl in sync.
+                    // New records are inserted as 'pending'. For existing records, only SourceUrl is updated
+                    // (this is a no-op when the URL hasn't changed). The actual detection of URL changes
+                    // and status reset is handled by DetectAndResetUrlChanges after this step.
                     var sql = $@"INSERT INTO `{sanitizedTable}` 
                         (SourceId, SourceTable, SourceUrl, Status) 
                         VALUES (@sourceId, @sourceTable, @sourceUrl, 'pending')
