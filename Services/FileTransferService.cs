@@ -155,7 +155,7 @@ public class FileTransferService : IDisposable
         try
         {
             var fileName = Path.GetFileName(new Uri(sourceUrl).AbsolutePath);
-            if (!string.IsNullOrEmpty(fileName) && fileName.Contains('.'))
+            if (!string.IsNullOrEmpty(fileName) && Path.HasExtension(fileName))
                 return fileName;
         }
         catch { }
