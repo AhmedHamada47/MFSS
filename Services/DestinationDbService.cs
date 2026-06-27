@@ -93,7 +93,8 @@ public class DestinationDbService
                 UNIQUE KEY uk_source (SourceId, SourceTable),
                 INDEX idx_status (Status),
                 INDEX idx_status_retry (Status, RetryCount),
-                INDEX idx_source_id (SourceId)
+                INDEX idx_source_id (SourceId),
+                INDEX idx_file_hash (FileHash)
             )";
         using var cmd = new MySqlCommand(sql, conn);
         cmd.ExecuteNonQuery();
@@ -159,16 +160,21 @@ public class DestinationDbService
             {
                 foreach (var record in group)
                 {
-                    // INSERT IGNORE skips duplicates based on UNIQUE KEY (SourceId, SourceTable)
-                    var sql = $@"INSERT IGNORE INTO `{sanitizedTable}` 
+                    // INSERT with ON DUPLICATE KEY UPDATE to track URL changes.
+                    // New records are inserted as 'pending'. Existing records get their SourceUrl updated
+                    // (URL change detection is handled separately by DetectAndResetUrlChanges).
+                    var sql = $@"INSERT INTO `{sanitizedTable}` 
                         (SourceId, SourceTable, SourceUrl, Status) 
-                        VALUES (@sourceId, @sourceTable, @sourceUrl, 'pending')";
+                        VALUES (@sourceId, @sourceTable, @sourceUrl, 'pending')
+                        ON DUPLICATE KEY UPDATE SourceUrl = VALUES(SourceUrl)";
 
                     using var cmd = new MySqlCommand(sql, conn, transaction);
                     cmd.Parameters.AddWithValue("@sourceId", record.Id);
                     cmd.Parameters.AddWithValue("@sourceTable", record.SourceTable);
                     cmd.Parameters.AddWithValue("@sourceUrl", record.SourceUrl);
-                    totalInserted += cmd.ExecuteNonQuery();
+                    var affected = cmd.ExecuteNonQuery();
+                    // MySQL returns 1 for insert, 2 for update, 0 for no change
+                    if (affected == 1) totalInserted++;
                 }
                 transaction.Commit();
             }
@@ -341,6 +347,113 @@ public class DestinationDbService
         }
 
         return summary;
+    }
+
+    /// <summary>
+    /// Finds an existing successfully migrated record with the same file hash.
+    /// Used for deduplication — if the same file content was already uploaded, reuse its destination URL.
+    /// </summary>
+    public (string? DestinationUrl, long? FileSize)? FindExistingByHash(string fileHash, List<SourceTableConfig> sourceTables)
+    {
+        var tableNames = GetAllLogTableNames(sourceTables);
+        using var conn = new MySqlConnection(_connectionString);
+        conn.Open();
+
+        foreach (var tableName in tableNames)
+        {
+            if (!TableExists(tableName)) continue;
+
+            var sql = $@"SELECT DestinationUrl, FileSize FROM `{SanitizeTableName(tableName)}` 
+                         WHERE FileHash = @hash AND Status = 'success' LIMIT 1";
+            using var cmd = new MySqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@hash", fileHash);
+            using var reader = cmd.ExecuteReader();
+
+            if (reader.Read())
+            {
+                return (reader.GetString("DestinationUrl"), reader.GetInt64("FileSize"));
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Detects records whose source URL has changed since they were last registered.
+    /// Resets them to "pending" so they get re-processed with the new URL.
+    /// Returns the count of records reset.
+    /// </summary>
+    public int DetectAndResetUrlChanges(List<MediaRecord> freshRecords)
+    {
+        int resetCount = 0;
+        var grouped = freshRecords.GroupBy(r => r.SourceTable);
+
+        using var conn = new MySqlConnection(_connectionString);
+        conn.Open();
+
+        foreach (var group in grouped)
+        {
+            var logTable = GetLogTableName(group.Key);
+            var sanitizedTable = SanitizeTableName(logTable);
+
+            if (!TableExists(logTable)) continue;
+
+            using var transaction = conn.BeginTransaction();
+            try
+            {
+                foreach (var record in group)
+                {
+                    // Check if the URL has changed for this record
+                    var checkSql = $@"SELECT Id, SourceUrl FROM `{sanitizedTable}` 
+                                     WHERE SourceId = @sourceId AND SourceTable = @sourceTable 
+                                     AND SourceUrl != @newUrl AND Status = 'success'";
+
+                    using var checkCmd = new MySqlCommand(checkSql, conn, transaction);
+                    checkCmd.Parameters.AddWithValue("@sourceId", record.Id);
+                    checkCmd.Parameters.AddWithValue("@sourceTable", record.SourceTable);
+                    checkCmd.Parameters.AddWithValue("@newUrl", record.SourceUrl);
+
+                    using var reader = checkCmd.ExecuteReader();
+                    if (reader.Read())
+                    {
+                        var logId = reader.GetInt64("Id");
+                        reader.Close();
+
+                        // URL changed — reset to pending with the new URL
+                        var updateSql = $@"UPDATE `{sanitizedTable}` 
+                                          SET Status = 'pending', SourceUrl = @newUrl, 
+                                              DestinationUrl = NULL, FileHash = NULL, FileSize = NULL,
+                                              RetryCount = 0, ErrorMessage = NULL 
+                                          WHERE Id = @logId";
+
+                        using var updateCmd = new MySqlCommand(updateSql, conn, transaction);
+                        updateCmd.Parameters.AddWithValue("@logId", logId);
+                        updateCmd.Parameters.AddWithValue("@newUrl", record.SourceUrl);
+                        resetCount += updateCmd.ExecuteNonQuery();
+                    }
+                    else
+                    {
+                        reader.Close();
+                    }
+                }
+                transaction.Commit();
+            }
+            catch
+            {
+                transaction.Rollback();
+                throw;
+            }
+        }
+
+        return resetCount;
+    }
+
+    /// <summary>
+    /// Marks a record as successfully migrated using a deduplicated (already existing) file.
+    /// </summary>
+    public void MarkSuccessDedup(long recordId, string sourceTable, string destinationUrl, long fileSize, string fileHash)
+    {
+        MarkSuccess(recordId, sourceTable, destinationUrl, fileSize, fileHash);
     }
 
     /// <summary>

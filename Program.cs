@@ -166,12 +166,21 @@ root.SetHandler(async (bool dryRun, string mode, string configPath, bool verbose
         log.Info($"     📋 {group.Key}: {group.Count()} records");
     log.Info("");
 
-    // Insert into log table(s) — uses INSERT IGNORE for resumability
+    // Insert into log table(s) — uses ON DUPLICATE KEY UPDATE for resumability and URL tracking
     log.Header("📦 STEP 2: Registering records in migration log...");
     if (!settings.DryRun)
     {
         var inserted = destService.InsertBatch(records);
-        log.Success($"  ✅ {inserted} new records registered (duplicates skipped).\n");
+        log.Success($"  ✅ {inserted} new records registered (duplicates updated).\n");
+
+        // Detect URL changes — reset records whose source URL changed back to pending
+        log.Info("  🔍 Checking for source URL changes...");
+        var urlResets = destService.DetectAndResetUrlChanges(records);
+        if (urlResets > 0)
+            log.Warning($"  ⚠️ {urlResets} records had URL changes and were reset to pending.");
+        else
+            log.Success("  ✅ No URL changes detected.");
+        log.Info("");
     }
     else log.Warning("  [DRY-RUN] Skipped.\n");
 
@@ -218,6 +227,22 @@ root.SetHandler(async (bool dryRun, string mode, string configPath, bool verbose
                 try
                 {
                     var (newUrl, size, hash) = await transferService.TransferAsync(record.SourceUrl, ct);
+
+                    // Deduplication: check if a file with the same hash already exists
+                    var existing = destService.FindExistingByHash(hash, tables);
+                    if (existing != null && existing.Value.DestinationUrl != null)
+                    {
+                        // Same file content already uploaded — reuse existing destination URL
+                        destService.MarkSuccess(record.Id, record.SourceTable, existing.Value.DestinationUrl, existing.Value.FileSize ?? size, hash);
+                        breaker.RecordSuccess();
+                        progress.RecordSuccess(existing.Value.FileSize ?? size);
+                        if (verbose) log.Info($"  ♻️ [{record.SourceTable}] id={record.Id} → deduplicated (hash match: {hash[..8]})");
+
+                        // Delete the newly uploaded file since we're reusing existing one
+                        try { await transferService.DeleteAsync(newUrl, ct); } catch { /* best effort cleanup */ }
+                        break;
+                    }
+
                     destService.MarkSuccess(record.Id, record.SourceTable, newUrl, size, hash);
                     breaker.RecordSuccess();
                     progress.RecordSuccess(size);
