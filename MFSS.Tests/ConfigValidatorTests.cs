@@ -134,10 +134,69 @@ public class ConfigValidatorTests
     [Fact]
     public void Validate_UnsupportedDestType_ReturnsError()
     {
-        var destFs = new FileSystemConfig { Type = "azure" };
+        var destFs = new FileSystemConfig { Type = "ftp" };
         var errors = ConfigValidator.Validate(
             ValidSettings(), ValidSourceDb(), ValidSrcFs(),
             destFs, ValidDestDb(), ValidThirdDb());
         Assert.Contains(errors, e => e.Contains("not supported"));
+    }
+
+    [Fact]
+    public void Validate_AzureMissingConnectionString_ReturnsError()
+    {
+        var destFs = new FileSystemConfig { Type = "azure", ContainerName = "my-container" };
+        var errors = ConfigValidator.Validate(
+            ValidSettings(), ValidSourceDb(), ValidSrcFs(),
+            destFs, ValidDestDb(), ValidThirdDb());
+        Assert.Contains(errors, e => e.Contains("AzureConnectionString"));
+    }
+
+    [Fact]
+    public void Validate_AzureMissingContainer_ReturnsError()
+    {
+        var destFs = new FileSystemConfig { Type = "azure", AzureConnectionString = "DefaultEndpointsProtocol=https;AccountName=test;" };
+        var errors = ConfigValidator.Validate(
+            ValidSettings(), ValidSourceDb(), ValidSrcFs(),
+            destFs, ValidDestDb(), ValidThirdDb());
+        Assert.Contains(errors, e => e.Contains("ContainerName"));
+    }
+
+    [Fact]
+    public void Validate_GcsMissingBucket_ReturnsError()
+    {
+        var destFs = new FileSystemConfig { Type = "gcs" };
+        var errors = ConfigValidator.Validate(
+            ValidSettings(), ValidSourceDb(), ValidSrcFs(),
+            destFs, ValidDestDb(), ValidThirdDb());
+        Assert.Contains(errors, e => e.Contains("GcsBucket"));
+    }
+
+    [Fact]
+    public void Validate_AzureValid_ReturnsNoError()
+    {
+        var destFs = new FileSystemConfig
+        {
+            Type = "azure",
+            AzureConnectionString = "DefaultEndpointsProtocol=https;AccountName=test;AccountKey=key;",
+            ContainerName = "my-container"
+        };
+        var errors = ConfigValidator.Validate(
+            ValidSettings(), ValidSourceDb(), ValidSrcFs(),
+            destFs, ValidDestDb(), ValidThirdDb());
+        Assert.Empty(errors);
+    }
+
+    [Fact]
+    public void Validate_GcsValid_ReturnsNoError()
+    {
+        var destFs = new FileSystemConfig
+        {
+            Type = "gcs",
+            GcsBucket = "my-bucket"
+        };
+        var errors = ConfigValidator.Validate(
+            ValidSettings(), ValidSourceDb(), ValidSrcFs(),
+            destFs, ValidDestDb(), ValidThirdDb());
+        Assert.Empty(errors);
     }
 }

@@ -4,12 +4,12 @@
 [![NuGet](https://img.shields.io/nuget/v/MFSS.svg)](https://www.nuget.org/packages/MFSS)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A high-performance .NET CLI tool for migrating files from HTTP sources to cloud storage (Amazon S3 or local filesystem) with full tracking, retry logic, circuit breaker pattern, and rollback support.
+A high-performance .NET CLI tool for migrating files between **any cloud storage providers** (Amazon S3, Azure Blob Storage, Google Cloud Storage, HTTP sources, or local filesystem) with full tracking, retry logic, circuit breaker pattern, and rollback support.
 
 ## ✨ Features
 
 - **🚀 High Performance** — Parallel downloads with configurable concurrency
-- **☁️ S3 & Local Storage** — Upload to Amazon S3 or local filesystem
+- **☁️ Any-to-Any Cloud Storage** — Transfer between S3, Azure Blob, Google Cloud Storage, HTTP, and local filesystem
 - **🔄 Resumable** — Safely re-run after crashes; duplicate records are skipped
 - **♻️ Rollback** — Delete migrated files from destination with a single command
 - **🛡️ Circuit Breaker** — Automatically stops requests after consecutive failures
@@ -181,15 +181,36 @@ mfss --config /path/to/config.json --mode migrate
 | `Tables[].UrlColumn` | string | Column containing file URLs |
 | `Tables[].IdColumn` | string | Primary key column |
 
+### Source File System
+
+| Setting | Type | Description |
+|---------|------|-------------|
+| `Type` | string | `http`, `s3`, `azure`, `gcs`, or `local` |
+| `BucketName` | string | S3 bucket name (required for S3 source) |
+| `Region` | string | AWS region (required for S3 source) |
+| `AccessKey` | string | AWS access key (supports `${ENV_VAR}`) |
+| `SecretKey` | string | AWS secret key (supports `${ENV_VAR}`) |
+| `AzureConnectionString` | string | Azure Blob connection string (required for Azure source) |
+| `ContainerName` | string | Azure container name (required for Azure source) |
+| `GcsBucket` | string | GCS bucket name (required for GCS source) |
+| `GcsCredentialPath` | string | Path to GCS service account JSON |
+| `GcsProjectId` | string | GCS project ID |
+| `BasePath` | string | Local base path (required for local source) |
+
 ### Destination File System
 
 | Setting | Type | Description |
 |---------|------|-------------|
-| `Type` | string | `s3` or `local` |
+| `Type` | string | `s3`, `azure`, `gcs`, or `local` |
 | `BucketName` | string | S3 bucket name (required for S3) |
 | `Region` | string | AWS region (required for S3) |
 | `AccessKey` | string | AWS access key (supports `${ENV_VAR}`) |
 | `SecretKey` | string | AWS secret key (supports `${ENV_VAR}`) |
+| `AzureConnectionString` | string | Azure Blob connection string (required for Azure) |
+| `ContainerName` | string | Azure container name (required for Azure) |
+| `GcsBucket` | string | GCS bucket name (required for GCS) |
+| `GcsCredentialPath` | string | Path to GCS service account JSON |
+| `GcsProjectId` | string | GCS project ID |
 | `BasePath` | string | Local base path (required for local) |
 
 ### Destination Database (Migration Log)
@@ -212,12 +233,14 @@ mfss --config /path/to/config.json --mode migrate
 ```
 ┌─────────────┐     ┌──────────────┐     ┌─────────────────┐
 │  Source DB   │────▶│   MFSS CLI   │────▶│  Destination    │
-│  (MySQL)     │     │              │     │  (S3 / Local)   │
-└─────────────┘     │  ┌────────┐  │     └─────────────────┘
-                    │  │Retry   │  │
-                    │  │Policy  │  │     ┌─────────────────┐
-                    │  ├────────┤  │────▶│  Log DB (MySQL) │
-                    │  │Circuit │  │     │  MigrationLog_* │
+│  (MySQL)     │     │              │     │  (S3/Azure/GCS/ │
+└─────────────┘     │  ┌────────┐  │     │   Local)        │
+                    │  │Retry   │  │     └─────────────────┘
+┌─────────────┐     │  │Policy  │  │
+│  Source      │────▶│  ├────────┤  │     ┌─────────────────┐
+│  (HTTP/S3/   │     │  │Circuit │  │────▶│  Log DB (MySQL) │
+│  Azure/GCS/  │     │  │Breaker │  │     │  MigrationLog_* │
+│  Local)      │     │  ├────────┤  │     └─────────────────┘
                     │  │Breaker │  │     └─────────────────┘
                     │  ├────────┤  │
                     │  │Rate    │  │     ┌─────────────────┐

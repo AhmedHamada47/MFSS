@@ -49,7 +49,7 @@ public static class ConfigValidator
 
         // Destination file system
         if (string.IsNullOrWhiteSpace(destFs.Type))
-            errors.Add("DestinationFileSystem.Type is required (local or s3).");
+            errors.Add("DestinationFileSystem.Type is required (local, s3, azure, or gcs).");
         else if (destFs.Type.Equals("s3", StringComparison.OrdinalIgnoreCase))
         {
             if (string.IsNullOrWhiteSpace(destFs.BucketName))
@@ -61,6 +61,18 @@ public static class ConfigValidator
             if (string.IsNullOrWhiteSpace(destFs.SecretKey))
                 errors.Add("DestinationFileSystem.SecretKey is required for S3.");
         }
+        else if (destFs.Type.Equals("azure", StringComparison.OrdinalIgnoreCase))
+        {
+            if (string.IsNullOrWhiteSpace(destFs.AzureConnectionString))
+                errors.Add("DestinationFileSystem.AzureConnectionString is required for Azure Blob Storage.");
+            if (string.IsNullOrWhiteSpace(destFs.ContainerName))
+                errors.Add("DestinationFileSystem.ContainerName is required for Azure Blob Storage.");
+        }
+        else if (destFs.Type.Equals("gcs", StringComparison.OrdinalIgnoreCase))
+        {
+            if (string.IsNullOrWhiteSpace(destFs.GcsBucket))
+                errors.Add("DestinationFileSystem.GcsBucket is required for Google Cloud Storage.");
+        }
         else if (destFs.Type.Equals("local", StringComparison.OrdinalIgnoreCase))
         {
             if (string.IsNullOrWhiteSpace(destFs.BasePath))
@@ -68,7 +80,40 @@ public static class ConfigValidator
         }
         else
         {
-            errors.Add($"DestinationFileSystem.Type '{destFs.Type}' is not supported. Use 'local' or 's3'.");
+            errors.Add($"DestinationFileSystem.Type '{destFs.Type}' is not supported. Use 'local', 's3', 'azure', or 'gcs'.");
+        }
+
+        // Source file system
+        if (!string.IsNullOrWhiteSpace(srcFs.Type))
+        {
+            if (srcFs.Type.Equals("s3", StringComparison.OrdinalIgnoreCase))
+            {
+                if (string.IsNullOrWhiteSpace(srcFs.BucketName))
+                    errors.Add("SourceFileSystem.BucketName is required for S3 source.");
+                if (string.IsNullOrWhiteSpace(srcFs.Region))
+                    errors.Add("SourceFileSystem.Region is required for S3 source.");
+                if (string.IsNullOrWhiteSpace(srcFs.AccessKey))
+                    errors.Add("SourceFileSystem.AccessKey is required for S3 source.");
+                if (string.IsNullOrWhiteSpace(srcFs.SecretKey))
+                    errors.Add("SourceFileSystem.SecretKey is required for S3 source.");
+            }
+            else if (srcFs.Type.Equals("azure", StringComparison.OrdinalIgnoreCase))
+            {
+                if (string.IsNullOrWhiteSpace(srcFs.AzureConnectionString))
+                    errors.Add("SourceFileSystem.AzureConnectionString is required for Azure Blob Storage source.");
+                if (string.IsNullOrWhiteSpace(srcFs.ContainerName))
+                    errors.Add("SourceFileSystem.ContainerName is required for Azure Blob Storage source.");
+            }
+            else if (srcFs.Type.Equals("gcs", StringComparison.OrdinalIgnoreCase))
+            {
+                if (string.IsNullOrWhiteSpace(srcFs.GcsBucket))
+                    errors.Add("SourceFileSystem.GcsBucket is required for Google Cloud Storage source.");
+            }
+            else if (!srcFs.Type.Equals("http", StringComparison.OrdinalIgnoreCase) &&
+                     !srcFs.Type.Equals("local", StringComparison.OrdinalIgnoreCase))
+            {
+                errors.Add($"SourceFileSystem.Type '{srcFs.Type}' is not supported. Use 'http', 'local', 's3', 'azure', or 'gcs'.");
+            }
         }
 
         // Destination DB (log)
