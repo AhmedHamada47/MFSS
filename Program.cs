@@ -87,7 +87,7 @@ root.SetHandler(async (bool dryRun, string mode, string configPath, bool verbose
     // Logger
     using var log = new Logger(settings.Name);
 
-    log.Header("🚀 MFSS - Migration File Storage System v1.0.0");
+    log.Header($"🚀 MFSS - Migration File Storage System v{typeof(MFSS.Services.Logger).Assembly.GetName().Version?.ToString(3) ?? "1.0.0"}");
     log.Header("═══════════════════════════════════════════════════════");
     log.Info($"  Migration: {settings.Name}");
     log.Info($"  Mode: {settings.Mode}");

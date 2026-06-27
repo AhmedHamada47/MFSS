@@ -31,8 +31,15 @@ public class FileTransferService : IDisposable
         // Token-bucket refill: release one token every (1000/rate) ms
         _rateLimiterRefill = new Timer(_ =>
         {
-            if (_rateLimiter.CurrentCount < _rateLimitPerSecond)
-                _rateLimiter.Release();
+            try
+            {
+                if (_rateLimiter.CurrentCount < _rateLimitPerSecond)
+                    _rateLimiter.Release();
+            }
+            catch (ObjectDisposedException)
+            {
+                // Timer fired after disposal — safe to ignore
+            }
         }, null, 0, Math.Max(1, 1000 / _rateLimitPerSecond));
 
         // Initialize S3 client if destination is S3

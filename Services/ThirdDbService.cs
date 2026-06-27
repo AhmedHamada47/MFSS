@@ -63,7 +63,12 @@ public class ThirdDbService
         catch (Exception ex)
         {
             _log.Error($"  ❌ Transaction commit failed: {ex.Message}");
-            try { transaction.Rollback(); } catch { }
+            try { transaction.Rollback(); }
+            catch (Exception rollbackEx)
+            {
+                // Rollback can fail if connection is broken — log but don't rethrow
+                _log.Error($"  ❌ Rollback also failed: {rollbackEx.Message}");
+            }
             return (0, records.Count);
         }
 
