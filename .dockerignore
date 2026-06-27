@@ -1,0 +1,10 @@
+**/.git
+**/bin
+**/obj
+**/nupkg
+**/logs
+**/.vs
+**/MFSS.Tests
+**/Dockerfile
+**/.dockerignore
+**/.github

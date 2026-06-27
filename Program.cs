@@ -5,17 +5,45 @@ using System.CommandLine;
 
 Console.OutputEncoding = System.Text.Encoding.UTF8;
 
+// Graceful shutdown support
+using var cts = new CancellationTokenSource();
+Console.CancelKeyPress += (_, e) =>
+{
+    e.Cancel = true;
+    cts.Cancel();
+    Console.WriteLine("\n⚠️ Cancellation requested. Finishing current operations...");
+};
+
 // CLI options
 var dryRunOption = new Option<bool>("--dry-run", "Preview migration without making changes");
 var modeOption = new Option<string>("--mode", () => "", "Migration mode: migrate or rollback");
-var root = new RootCommand("MFSS - Migration File Storage System") { dryRunOption, modeOption };
+var configOption = new Option<string>("--config", () => "appsettings.json", "Path to configuration file");
+var verboseOption = new Option<bool>("--verbose", "Show detailed progress for each file");
 
-root.SetHandler(async (bool dryRun, string mode) =>
+var root = new RootCommand("MFSS - Migration File Storage System\n\nA high-performance CLI tool for migrating files from HTTP sources to cloud storage (S3/Local) with full tracking, retry logic, circuit breaker, and rollback support.\n\nInstall: dotnet tool install -g MFSS\nUsage:   mfss --mode migrate --config appsettings.json")
 {
+    dryRunOption, modeOption, configOption, verboseOption
+};
+
+root.SetHandler(async (bool dryRun, string mode, string configPath, bool verbose) =>
+{
+    var ct = cts.Token;
+
     // Load config
+    if (!File.Exists(configPath))
+    {
+        Console.ForegroundColor = ConsoleColor.Red;
+        Console.WriteLine($"❌ Configuration file not found: {configPath}");
+        Console.ResetColor();
+        Console.WriteLine("  Create an appsettings.json or specify path with --config");
+        Environment.ExitCode = 1;
+        return;
+    }
+
     var config = new ConfigurationBuilder()
         .SetBasePath(Directory.GetCurrentDirectory())
-        .AddJsonFile("appsettings.json", optional: false)
+        .AddJsonFile(configPath, optional: false)
+        .AddEnvironmentVariables("MFSS_")
         .Build();
 
     var settings = new MigrationSettings();
@@ -43,10 +71,23 @@ root.SetHandler(async (bool dryRun, string mode) =>
     // Resolve env variables
     EnvConfigResolver.ResolveAll(sourceDb, destDb, thirdDb, srcFs, destFs);
 
-    // Logger
-    var log = new Logger(settings.Name);
+    // Validate configuration
+    var validationErrors = ConfigValidator.Validate(settings, sourceDb, srcFs, destFs, destDb, thirdDb);
+    if (validationErrors.Count > 0)
+    {
+        Console.ForegroundColor = ConsoleColor.Red;
+        Console.WriteLine("❌ Configuration validation failed:");
+        foreach (var error in validationErrors)
+            Console.WriteLine($"   • {error}");
+        Console.ResetColor();
+        Environment.ExitCode = 1;
+        return;
+    }
 
-    log.Header("🚀 MFSS - Migration File Storage System");
+    // Logger
+    using var log = new Logger(settings.Name);
+
+    log.Header("🚀 MFSS - Migration File Storage System v1.0.0");
     log.Header("═══════════════════════════════════════════════════════");
     log.Info($"  Migration: {settings.Name}");
     log.Info($"  Mode: {settings.Mode}");
@@ -55,15 +96,12 @@ root.SetHandler(async (bool dryRun, string mode) =>
     log.Info($"  Destination: {destFs.Type} → {destFs.BucketName}");
     log.Info($"  Log DB: {SecretMasker.MaskConnectionString(destDb.ConnectionString)}");
     log.Info($"  Separate Log Tables: {destDb.SeparateTablesPerSource}");
+    log.Info($"  Parallel Downloads: {settings.ParallelDownloads}");
+    log.Info($"  Rate Limit: {settings.RateLimitPerSecond}/sec");
     log.Info("");
 
     // Validate tables
     var tables = sourceDb.GetEffectiveTables();
-    if (tables.Count == 0)
-    {
-        log.Error("❌ No source tables configured. Check appsettings.json SourceDb.Tables");
-        return;
-    }
     log.Info($"  📋 Tables to process: {tables.Count}");
     foreach (var t in tables)
         log.Info($"     - {t.TableName}.{t.UrlColumn} (id: {t.IdColumn})");
@@ -107,7 +145,8 @@ root.SetHandler(async (bool dryRun, string mode) =>
         int rolled = 0;
         foreach (var (id, url) in successRecs)
         {
-            try { await transfer.DeleteAsync(url); rolled++; }
+            if (ct.IsCancellationRequested) { log.Warning("  ⚠️ Cancelled."); break; }
+            try { await transfer.DeleteAsync(url, ct); rolled++; }
             catch (Exception ex) { log.Error($"  ❌ Rollback failed for id={id}: {ex.Message}"); }
         }
         log.Success($"\n🎉 Rollback complete: {rolled}/{successRecs.Count} files deleted from destination.");
@@ -127,12 +166,12 @@ root.SetHandler(async (bool dryRun, string mode) =>
         log.Info($"     📋 {group.Key}: {group.Count()} records");
     log.Info("");
 
-    // Insert into log table(s) — records are routed to per-table log tables automatically
+    // Insert into log table(s) — uses INSERT IGNORE for resumability
     log.Header("📦 STEP 2: Registering records in migration log...");
     if (!settings.DryRun)
     {
         var inserted = destService.InsertBatch(records);
-        log.Success($"  ✅ {inserted} records registered.\n");
+        log.Success($"  ✅ {inserted} new records registered (duplicates skipped).\n");
     }
     else log.Warning("  [DRY-RUN] Skipped.\n");
 
@@ -159,25 +198,35 @@ root.SetHandler(async (bool dryRun, string mode) =>
     var semaphore = new SemaphoreSlim(settings.ParallelDownloads);
     var tasks = pending.Select(async record =>
     {
-        await semaphore.WaitAsync();
+        if (ct.IsCancellationRequested) return;
+
+        await semaphore.WaitAsync(ct);
         try
         {
+            if (ct.IsCancellationRequested) return;
+
             if (!breaker.AllowRequest())
             {
-                log.Warning($"  ⏸️ Circuit open, skipping id={record.Id}");
+                if (verbose) log.Warning($"  ⏸️ Circuit open, skipping id={record.Id}");
                 return;
             }
 
             for (int attempt = 0; attempt < settings.MaxRetries; attempt++)
             {
+                if (ct.IsCancellationRequested) return;
+
                 try
                 {
-                    var (newUrl, size, hash) = await transferService.TransferAsync(record.SourceUrl);
+                    var (newUrl, size, hash) = await transferService.TransferAsync(record.SourceUrl, ct);
                     destService.MarkSuccess(record.Id, record.SourceTable, newUrl, size, hash);
                     breaker.RecordSuccess();
                     progress.RecordSuccess(size);
-                    log.Success($"  ✅ [{record.SourceTable}] id={record.Id} → {newUrl}");
+                    if (verbose) log.Success($"  ✅ [{record.SourceTable}] id={record.Id} → {newUrl}");
                     break;
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
                 }
                 catch (Exception ex)
                 {
@@ -186,12 +235,12 @@ root.SetHandler(async (bool dryRun, string mode) =>
                         destService.MarkFailed(record.Id, record.SourceTable, ex.Message, settings.MaxRetries);
                         breaker.RecordFailure();
                         progress.RecordFailure();
-                        log.Error($"  ❌ [{record.SourceTable}] id={record.Id} - {ex.Message}");
+                        if (verbose) log.Error($"  ❌ [{record.SourceTable}] id={record.Id} - {ex.Message}");
                     }
                     else
                     {
                         var delay = RetryPolicy.GetDelay(attempt);
-                        await Task.Delay(delay);
+                        await Task.Delay(delay, ct);
                     }
                 }
             }
@@ -199,7 +248,14 @@ root.SetHandler(async (bool dryRun, string mode) =>
         finally { semaphore.Release(); }
     });
 
-    await Task.WhenAll(tasks);
+    try
+    {
+        await Task.WhenAll(tasks);
+    }
+    catch (OperationCanceledException)
+    {
+        log.Warning("\n  ⚠️ Migration cancelled by user.");
+    }
 
     // Summary
     log.Header("\n═══════════════════════════════════════════════════════");
@@ -209,7 +265,7 @@ root.SetHandler(async (bool dryRun, string mode) =>
     foreach (var kv in summary) log.Info($"  {kv.Key}: {kv.Value}");
 
     // Update third DB if enabled
-    if (thirdDb.Enabled)
+    if (thirdDb.Enabled && !ct.IsCancellationRequested)
     {
         log.Header("\n📦 Updating third-party database...");
         var thirdService = new ThirdDbService(thirdDb, log);
@@ -220,6 +276,13 @@ root.SetHandler(async (bool dryRun, string mode) =>
 
     log.Success($"\n🎉 Migration complete! Log: {log.LogPath}");
 
-}, dryRunOption, modeOption);
+    if (progress.HasFailures)
+    {
+        log.Warning("  ⚠️ Some files failed. Re-run to retry pending records (resumable).");
+        Environment.ExitCode = 1;
+    }
+
+}, dryRunOption, modeOption, configOption, verboseOption);
 
 await root.InvokeAsync(args);
+

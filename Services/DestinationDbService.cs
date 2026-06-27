@@ -6,6 +6,7 @@ namespace MFSS.Services;
 /// <summary>
 /// Manages migration log tables in the destination database.
 /// Supports creating separate tables per source table when SeparateTablesPerSource is enabled.
+/// Uses connection pooling (via MySqlConnection) and batch operations for performance.
 /// </summary>
 public class DestinationDbService
 {
@@ -69,6 +70,7 @@ public class DestinationDbService
 
     /// <summary>
     /// Creates a migration log table with the given name.
+    /// Includes a UNIQUE constraint on (SourceId, SourceTable) for resumability.
     /// </summary>
     public void CreateTable(string tableName)
     {
@@ -88,7 +90,9 @@ public class DestinationDbService
                 ErrorMessage TEXT NULL,
                 CreatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 UpdatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                UNIQUE KEY uk_source (SourceId, SourceTable),
                 INDEX idx_status (Status),
+                INDEX idx_status_retry (Status, RetryCount),
                 INDEX idx_source_id (SourceId)
             )";
         using var cmd = new MySqlCommand(sql, conn);
@@ -131,8 +135,8 @@ public class DestinationDbService
     }
 
     /// <summary>
-    /// Inserts a batch of records into their respective migration log tables.
-    /// Records are grouped by SourceTable and inserted into the correct log table.
+    /// Inserts a batch of records into their respective migration log tables using transactions.
+    /// Uses INSERT IGNORE to support resumability — duplicate records are skipped.
     /// </summary>
     public int InsertBatch(List<MediaRecord> records)
     {
@@ -147,18 +151,31 @@ public class DestinationDbService
         foreach (var group in grouped)
         {
             var logTable = GetLogTableName(group.Key);
+            var sanitizedTable = SanitizeTableName(logTable);
 
-            foreach (var record in group)
+            // Use a transaction for batch performance
+            using var transaction = conn.BeginTransaction();
+            try
             {
-                var sql = $@"INSERT INTO `{SanitizeTableName(logTable)}` 
-                    (SourceId, SourceTable, SourceUrl, Status) 
-                    VALUES (@sourceId, @sourceTable, @sourceUrl, 'pending')";
+                foreach (var record in group)
+                {
+                    // INSERT IGNORE skips duplicates based on UNIQUE KEY (SourceId, SourceTable)
+                    var sql = $@"INSERT IGNORE INTO `{sanitizedTable}` 
+                        (SourceId, SourceTable, SourceUrl, Status) 
+                        VALUES (@sourceId, @sourceTable, @sourceUrl, 'pending')";
 
-                using var cmd = new MySqlCommand(sql, conn);
-                cmd.Parameters.AddWithValue("@sourceId", record.Id);
-                cmd.Parameters.AddWithValue("@sourceTable", record.SourceTable);
-                cmd.Parameters.AddWithValue("@sourceUrl", record.SourceUrl);
-                totalInserted += cmd.ExecuteNonQuery();
+                    using var cmd = new MySqlCommand(sql, conn, transaction);
+                    cmd.Parameters.AddWithValue("@sourceId", record.Id);
+                    cmd.Parameters.AddWithValue("@sourceTable", record.SourceTable);
+                    cmd.Parameters.AddWithValue("@sourceUrl", record.SourceUrl);
+                    totalInserted += cmd.ExecuteNonQuery();
+                }
+                transaction.Commit();
+            }
+            catch
+            {
+                transaction.Rollback();
+                throw;
             }
         }
 
@@ -195,10 +212,6 @@ public class DestinationDbService
 
         return results;
     }
-
-    /// <summary>
-    /// Gets pending records by log table primary key Id (used for MarkSuccess/MarkFailed).
-    /// </summary>
 
     /// <summary>
     /// Gets all pending records across all log tables for the given source tables.
