@@ -241,12 +241,11 @@ mfss --config /path/to/config.json --mode migrate
 │  (HTTP/S3/   │     │  │Circuit │  │────▶│  Log DB (MySQL) │
 │  Azure/GCS/  │     │  │Breaker │  │     │  MigrationLog_* │
 │  Local)      │     │  ├────────┤  │     └─────────────────┘
-                    │  │Breaker │  │     └─────────────────┘
-                    │  ├────────┤  │
-                    │  │Rate    │  │     ┌─────────────────┐
-                    │  │Limiter │  │────▶│  Third DB       │
-                    │  └────────┘  │     │  (Optional)     │
-                    └──────────────┘     └─────────────────┘
+                    │  │Rate    │  │
+                    │  │Limiter │  │     ┌─────────────────┐
+                    │  └────────┘  │────▶│  Third DB       │
+                    └──────────────┘     │  (Optional)     │
+                                        └─────────────────┘
 ```
 
 ### Key Services
@@ -254,7 +253,7 @@ mfss --config /path/to/config.json --mode migrate
 | Service | Responsibility |
 |---------|---------------|
 | `SourceDbService` | Fetches file URLs from source tables |
-| `FileTransferService` | Downloads files and uploads to S3/local |
+| `FileTransferService` | Downloads and uploads files between any cloud storage |
 | `DestinationDbService` | Manages migration log tables |
 | `ThirdDbService` | Updates third-party DB with new URLs |
 | `CircuitBreaker` | Stops requests after consecutive failures |

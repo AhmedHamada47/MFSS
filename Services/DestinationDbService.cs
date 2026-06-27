@@ -57,7 +57,7 @@ public class DestinationDbService
         {
             var sql = $@"
                 CREATE TABLE [{tableName}] (
-                    [Id] INT NOT NULL,
+                    [Id] BIGINT NOT NULL,
                     [SourceTable] NVARCHAR(255) NOT NULL,
                     [SourceUrl] NVARCHAR(2048) NULL,
                     [DestinationUrl] NVARCHAR(2048) NULL,
