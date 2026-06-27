@@ -1,4 +1,4 @@
-using MySql.Data.MySqlClient;
+using Microsoft.Data.SqlClient;
 using MFSS.Models;
 
 namespace MFSS.Services;
@@ -27,7 +27,7 @@ public class ThirdDbService
     {
         int success = 0, failed = 0;
 
-        using var conn = new MySqlConnection(_config.ConnectionString);
+        using var conn = new SqlConnection(_config.ConnectionString);
         conn.Open();
         using var transaction = conn.BeginTransaction();
 
@@ -41,7 +41,7 @@ public class ThirdDbService
                         .Replace("{id}", "@id")
                         .Replace("{url}", "@url");
 
-                    using var cmd = new MySqlCommand(sql, conn, transaction);
+                    using var cmd = new SqlCommand(sql, conn, transaction);
                     cmd.Parameters.AddWithValue("@id", id);
                     cmd.Parameters.AddWithValue("@url", url);
                     cmd.ExecuteNonQuery();
@@ -66,7 +66,6 @@ public class ThirdDbService
             try { transaction.Rollback(); }
             catch (Exception rollbackEx)
             {
-                // Rollback can fail if connection is broken — log but don't rethrow
                 _log.Error($"  ❌ Rollback also failed: {rollbackEx.Message}");
             }
             return (0, records.Count);

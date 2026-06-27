@@ -1,4 +1,4 @@
-using MySql.Data.MySqlClient;
+using Microsoft.Data.SqlClient;
 using MFSS.Models;
 
 namespace MFSS.Services;
@@ -21,7 +21,7 @@ public class SourceDbService
         var results = new List<MediaRecord>();
         var tables = _config.GetEffectiveTables();
 
-        using var conn = new MySqlConnection(_config.ConnectionString);
+        using var conn = new SqlConnection(_config.ConnectionString);
         conn.Open();
 
         foreach (var table in tables)
@@ -31,20 +31,20 @@ public class SourceDbService
             ValidateName(table.IdColumn);
             ValidateName(table.UrlColumn);
 
-            var sql = $@"SELECT `{table.IdColumn}` AS Id, `{table.UrlColumn}` AS Url 
-                         FROM `{table.TableName}` 
-                         WHERE `{table.UrlColumn}` IS NOT NULL AND `{table.UrlColumn}` != ''";
+            var sql = $@"SELECT [{table.IdColumn}] AS Id, [{table.UrlColumn}] AS Url 
+                         FROM [{table.TableName}] 
+                         WHERE [{table.UrlColumn}] IS NOT NULL AND [{table.UrlColumn}] != ''";
 
-            using var cmd = new MySqlCommand(sql, conn);
+            using var cmd = new SqlCommand(sql, conn);
             using var reader = cmd.ExecuteReader();
 
             while (reader.Read())
             {
                 results.Add(new MediaRecord
                 {
-                    Id = reader.GetInt64("Id"),
-                    SourceUrl = reader.GetString("Url"),
-                    SourceTable = table.TableName  // Tag each record with its source table
+                    Id = Convert.ToInt64(reader["Id"]),
+                    SourceUrl = reader.GetString(reader.GetOrdinal("Url")),
+                    SourceTable = table.TableName
                 });
             }
         }
