@@ -3,6 +3,10 @@ using MFSS.Models;
 
 namespace MFSS.Services;
 
+/// <summary>
+/// Updates a third-party database with new file URLs after successful migration.
+/// Uses atomic transactions — either all updates succeed or none are applied.
+/// </summary>
 public class ThirdDbService
 {
     private readonly ThirdDbConfig _config;
@@ -14,6 +18,11 @@ public class ThirdDbService
         _log = log;
     }
 
+    /// <summary>
+    /// Updates records in the third-party database within a single transaction.
+    /// If any update fails, the entire transaction is rolled back.
+    /// Returns the count of successful and failed updates.
+    /// </summary>
     public (int Success, int Failed) UpdateWithTransaction(List<(long Id, string Url)> records)
     {
         int success = 0, failed = 0;
@@ -42,15 +51,25 @@ public class ThirdDbService
                 {
                     _log.Error($"  ❌ Third DB update failed for id={id}: {ex.Message}");
                     failed++;
+                    // Roll back entire transaction on any failure for data consistency
+                    transaction.Rollback();
+                    _log.Warning($"  ⚠️ Transaction rolled back due to failure. {success} previously successful updates were reverted.");
+                    return (0, failed + success);
                 }
             }
 
             transaction.Commit();
         }
-        catch
+        catch (Exception ex)
         {
-            transaction.Rollback();
-            throw;
+            _log.Error($"  ❌ Transaction commit failed: {ex.Message}");
+            try { transaction.Rollback(); }
+            catch (Exception rollbackEx)
+            {
+                // Rollback can fail if connection is broken — log but don't rethrow
+                _log.Error($"  ❌ Rollback also failed: {rollbackEx.Message}");
+            }
+            return (0, records.Count);
         }
 
         return (success, failed);
