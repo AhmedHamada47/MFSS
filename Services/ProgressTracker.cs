@@ -1,10 +1,8 @@
+using MFSS.Abstractions;
+
 namespace MFSS.Services;
 
-/// <summary>
-/// Thread-safe progress tracker for migration operations.
-/// Tracks success/failure counts and total bytes transferred.
-/// </summary>
-public class ProgressTracker
+public class ProgressTracker : IProgressTracker
 {
     private readonly int _total;
     private int _success;
@@ -18,6 +16,14 @@ public class ProgressTracker
     }
 
     public bool HasFailures => Interlocked.CompareExchange(ref _failed, 0, 0) > 0;
+
+    public int Success => Interlocked.CompareExchange(ref _success, 0, 0);
+
+    public int Failed => Interlocked.CompareExchange(ref _failed, 0, 0);
+
+    public int Total => _total;
+
+    public long TotalBytes => Interlocked.Read(ref _totalBytes);
 
     public void RecordSuccess(long bytes)
     {

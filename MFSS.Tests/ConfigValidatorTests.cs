@@ -39,7 +39,7 @@ public class ConfigValidatorTests
     [Fact]
     public void Validate_AllValid_ReturnsEmptyList()
     {
-        var errors = ConfigValidator.Validate(
+        var errors = new ConfigValidator().Validate(
             ValidSettings(), ValidSourceDb(), ValidSrcFs(),
             ValidDestFs(), ValidDestDb(), ValidThirdDb());
         Assert.Empty(errors);
@@ -50,7 +50,7 @@ public class ConfigValidatorTests
     {
         var settings = ValidSettings();
         settings.Mode = "invalid";
-        var errors = ConfigValidator.Validate(
+        var errors = new ConfigValidator().Validate(
             settings, ValidSourceDb(), ValidSrcFs(),
             ValidDestFs(), ValidDestDb(), ValidThirdDb());
         Assert.Contains(errors, e => e.Contains("Mode"));
@@ -64,7 +64,7 @@ public class ConfigValidatorTests
             ConnectionString = "Server=localhost;",
             Tables = new List<SourceTableConfig>()
         };
-        var errors = ConfigValidator.Validate(
+        var errors = new ConfigValidator().Validate(
             ValidSettings(), sourceDb, ValidSrcFs(),
             ValidDestFs(), ValidDestDb(), ValidThirdDb());
         Assert.Contains(errors, e => e.Contains("at least one"));
@@ -74,7 +74,7 @@ public class ConfigValidatorTests
     public void Validate_S3MissingBucket_ReturnsError()
     {
         var destFs = new FileSystemConfig { Type = "s3", Region = "us-east-1", AccessKey = "k", SecretKey = "s" };
-        var errors = ConfigValidator.Validate(
+        var errors = new ConfigValidator().Validate(
             ValidSettings(), ValidSourceDb(), ValidSrcFs(),
             destFs, ValidDestDb(), ValidThirdDb());
         Assert.Contains(errors, e => e.Contains("BucketName"));
@@ -84,7 +84,7 @@ public class ConfigValidatorTests
     public void Validate_LocalMissingBasePath_ReturnsError()
     {
         var destFs = new FileSystemConfig { Type = "local" };
-        var errors = ConfigValidator.Validate(
+        var errors = new ConfigValidator().Validate(
             ValidSettings(), ValidSourceDb(), ValidSrcFs(),
             destFs, ValidDestDb(), ValidThirdDb());
         Assert.Contains(errors, e => e.Contains("BasePath"));
@@ -99,7 +99,7 @@ public class ConfigValidatorTests
             ConnectionString = "Server=localhost;",
             UpdateQuery = ""
         };
-        var errors = ConfigValidator.Validate(
+        var errors = new ConfigValidator().Validate(
             ValidSettings(), ValidSourceDb(), ValidSrcFs(),
             ValidDestFs(), ValidDestDb(), thirdDb);
         Assert.Contains(errors, e => e.Contains("UpdateQuery"));
@@ -114,7 +114,7 @@ public class ConfigValidatorTests
             ConnectionString = "Server=localhost;",
             UpdateQuery = "UPDATE table SET col = 'value'"
         };
-        var errors = ConfigValidator.Validate(
+        var errors = new ConfigValidator().Validate(
             ValidSettings(), ValidSourceDb(), ValidSrcFs(),
             ValidDestFs(), ValidDestDb(), thirdDb);
         Assert.Contains(errors, e => e.Contains("{id}") || e.Contains("{url}"));
@@ -125,7 +125,7 @@ public class ConfigValidatorTests
     {
         var settings = ValidSettings();
         settings.ParallelDownloads = 0;
-        var errors = ConfigValidator.Validate(
+        var errors = new ConfigValidator().Validate(
             settings, ValidSourceDb(), ValidSrcFs(),
             ValidDestFs(), ValidDestDb(), ValidThirdDb());
         Assert.Contains(errors, e => e.Contains("ParallelDownloads"));
@@ -135,7 +135,7 @@ public class ConfigValidatorTests
     public void Validate_UnsupportedDestType_ReturnsError()
     {
         var destFs = new FileSystemConfig { Type = "ftp" };
-        var errors = ConfigValidator.Validate(
+        var errors = new ConfigValidator().Validate(
             ValidSettings(), ValidSourceDb(), ValidSrcFs(),
             destFs, ValidDestDb(), ValidThirdDb());
         Assert.Contains(errors, e => e.Contains("not supported"));
@@ -145,7 +145,7 @@ public class ConfigValidatorTests
     public void Validate_AzureMissingConnectionString_ReturnsError()
     {
         var destFs = new FileSystemConfig { Type = "azure", ContainerName = "my-container" };
-        var errors = ConfigValidator.Validate(
+        var errors = new ConfigValidator().Validate(
             ValidSettings(), ValidSourceDb(), ValidSrcFs(),
             destFs, ValidDestDb(), ValidThirdDb());
         Assert.Contains(errors, e => e.Contains("AzureConnectionString"));
@@ -155,7 +155,7 @@ public class ConfigValidatorTests
     public void Validate_AzureMissingContainer_ReturnsError()
     {
         var destFs = new FileSystemConfig { Type = "azure", AzureConnectionString = "DefaultEndpointsProtocol=https;AccountName=test;" };
-        var errors = ConfigValidator.Validate(
+        var errors = new ConfigValidator().Validate(
             ValidSettings(), ValidSourceDb(), ValidSrcFs(),
             destFs, ValidDestDb(), ValidThirdDb());
         Assert.Contains(errors, e => e.Contains("ContainerName"));
@@ -165,7 +165,7 @@ public class ConfigValidatorTests
     public void Validate_GcsMissingBucket_ReturnsError()
     {
         var destFs = new FileSystemConfig { Type = "gcs" };
-        var errors = ConfigValidator.Validate(
+        var errors = new ConfigValidator().Validate(
             ValidSettings(), ValidSourceDb(), ValidSrcFs(),
             destFs, ValidDestDb(), ValidThirdDb());
         Assert.Contains(errors, e => e.Contains("GcsBucket"));
@@ -180,7 +180,7 @@ public class ConfigValidatorTests
             AzureConnectionString = "DefaultEndpointsProtocol=https;AccountName=test;AccountKey=key;",
             ContainerName = "my-container"
         };
-        var errors = ConfigValidator.Validate(
+        var errors = new ConfigValidator().Validate(
             ValidSettings(), ValidSourceDb(), ValidSrcFs(),
             destFs, ValidDestDb(), ValidThirdDb());
         Assert.Empty(errors);
@@ -194,7 +194,7 @@ public class ConfigValidatorTests
             Type = "gcs",
             GcsBucket = "my-bucket"
         };
-        var errors = ConfigValidator.Validate(
+        var errors = new ConfigValidator().Validate(
             ValidSettings(), ValidSourceDb(), ValidSrcFs(),
             destFs, ValidDestDb(), ValidThirdDb());
         Assert.Empty(errors);

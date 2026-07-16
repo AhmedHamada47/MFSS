@@ -1,6 +1,8 @@
+using MFSS.Abstractions;
+
 namespace MFSS.Services;
 
-public class Logger : IDisposable
+public class Logger : ILogger
 {
     private readonly string _migrationName;
     private readonly string _logPath;
@@ -22,6 +24,16 @@ public class Logger : IDisposable
     public void Success(string msg) => Write(msg, ConsoleColor.Green);
     public void Warning(string msg) => Write(msg, ConsoleColor.Yellow);
     public void Error(string msg) => Write(msg, ConsoleColor.Red);
+
+    public void Progress(string msg)
+    {
+        int width;
+        try { width = Console.WindowWidth; } catch { width = 80; }
+        var prev = Console.ForegroundColor;
+        Console.ForegroundColor = ConsoleColor.Cyan;
+        Console.Write($"\r{msg}{new string(' ', Math.Max(0, width - msg.Length - 1))}\r");
+        Console.ForegroundColor = prev;
+    }
 
     private void Write(string msg, ConsoleColor color)
     {

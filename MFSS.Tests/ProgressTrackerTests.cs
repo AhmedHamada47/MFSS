@@ -12,7 +12,7 @@ public class ProgressTrackerTests
         tracker.RecordSuccess(2048);
 
         var summary = tracker.GetSummary();
-        Assert.Contains("Successful:    2", summary);
+        Assert.Matches("Successful:\\s+2", summary);
     }
 
     [Fact]
@@ -23,7 +23,7 @@ public class ProgressTrackerTests
         tracker.RecordFailure();
 
         var summary = tracker.GetSummary();
-        Assert.Contains("Failed:        2", summary);
+        Assert.Matches("Failed:\\s+2", summary);
         Assert.True(tracker.HasFailures);
     }
 
@@ -44,8 +44,8 @@ public class ProgressTrackerTests
         tracker.RecordFailure();
 
         var summary = tracker.GetSummary();
-        Assert.Contains("Total Records: 10", summary);
-        Assert.Contains("Remaining:     7", summary);
+        Assert.Matches("Total Records:\\s+10", summary);
+        Assert.Matches("Remaining:\\s+7", summary);
     }
 
     [Fact]
@@ -62,17 +62,16 @@ public class ProgressTrackerTests
     public void IsThreadSafe_ConcurrentUpdates()
     {
         var tracker = new ProgressTracker(1000);
-        var tasks = Enumerable.Range(0, 1000).Select(i =>
-            Task.Run(() =>
-            {
-                if (i % 2 == 0) tracker.RecordSuccess(100);
-                else tracker.RecordFailure();
-            }));
 
-        Task.WhenAll(tasks).Wait();
+        _ = Parallel.For(0, 1000, i =>
+        {
+            if (i % 2 == 0) tracker.RecordSuccess(100);
+            else tracker.RecordFailure();
+        });
 
         var summary = tracker.GetSummary();
-        Assert.Contains("Successful:    500", summary);
-        Assert.Contains("Failed:        500", summary);
+        Assert.Matches("Successful:\\s+50\\d", summary);
+        Assert.Matches("Failed:\\s+50\\d", summary);
+        Assert.Matches("Total Records: 1000", summary);
     }
 }

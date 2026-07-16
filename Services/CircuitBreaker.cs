@@ -1,20 +1,20 @@
+using MFSS.Abstractions;
+
 namespace MFSS.Services;
 
-/// <summary>
-/// Thread-safe circuit breaker pattern implementation.
-/// Opens the circuit after a threshold of consecutive failures, 
-/// preventing further requests until a timeout period elapses.
-/// </summary>
-public class CircuitBreaker
+public class CircuitBreaker : ICircuitBreaker
 {
     private readonly int _threshold;
     private readonly TimeSpan _timeout;
-    private readonly Logger _log;
+    private readonly ILogger _log;
     private int _failureCount;
     private long _lastFailureTicks = DateTime.MinValue.Ticks;
-    private int _isOpen; // 0 = closed, 1 = open (using int for Interlocked)
+    private int _isOpen;
 
-    public CircuitBreaker(int threshold, TimeSpan timeout, Logger log)
+    private const int Closed = 0;
+    private const int Open = 1;
+
+    public CircuitBreaker(int threshold, TimeSpan timeout, ILogger log)
     {
         _threshold = threshold;
         _timeout = timeout;
@@ -23,23 +23,23 @@ public class CircuitBreaker
 
     public bool AllowRequest()
     {
-        if (Interlocked.CompareExchange(ref _isOpen, 0, 0) == 0) return true;
+        if (Volatile.Read(ref _isOpen) == Closed) return true;
 
-        var lastFailureTime = new DateTime(Interlocked.Read(ref _lastFailureTicks), DateTimeKind.Utc);
-        if (DateTime.UtcNow - lastFailureTime > _timeout)
-        {
-            Interlocked.Exchange(ref _isOpen, 0);
-            Interlocked.Exchange(ref _failureCount, 0);
-            _log.Info("  🔌 Circuit breaker reset (half-open).");
-            return true;
-        }
-        return false;
+        if (DateTime.UtcNow - new DateTime(Interlocked.Read(ref _lastFailureTicks), DateTimeKind.Utc) <= _timeout)
+            return false;
+
+        if (Interlocked.CompareExchange(ref _isOpen, Closed, Open) != Open)
+            return false;
+
+        Interlocked.Exchange(ref _failureCount, 0);
+        _log.Info("Circuit breaker reset (half-open).");
+        return true;
     }
 
     public void RecordSuccess()
     {
         Interlocked.Exchange(ref _failureCount, 0);
-        Interlocked.Exchange(ref _isOpen, 0);
+        Interlocked.Exchange(ref _isOpen, Closed);
     }
 
     public void RecordFailure()
@@ -48,8 +48,8 @@ public class CircuitBreaker
         Interlocked.Exchange(ref _lastFailureTicks, DateTime.UtcNow.Ticks);
         if (count >= _threshold)
         {
-            Interlocked.Exchange(ref _isOpen, 1);
-            _log.Warning($"  🔌 Circuit breaker OPEN after {count} consecutive failures.");
+            Interlocked.Exchange(ref _isOpen, Open);
+            _log.Warning($"Circuit breaker OPEN after {count} consecutive failures.");
         }
     }
 }

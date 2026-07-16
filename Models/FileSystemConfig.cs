@@ -7,11 +7,12 @@ public class FileSystemConfig
     // Common
     public string BasePath { get; set; } = "";
 
-    // S3
+    // S3 (also supports S3-compatible services like Cloudflare R2)
     public string BucketName { get; set; } = "";
     public string Region { get; set; } = "";
     public string AccessKey { get; set; } = "";
     public string SecretKey { get; set; } = "";
+    public string Endpoint { get; set; } = ""; // Custom endpoint for S3-compatible (e.g. R2)
 
     // Azure Blob Storage
     public string AzureConnectionString { get; set; } = "";

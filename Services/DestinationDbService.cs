@@ -1,9 +1,11 @@
 using Microsoft.Data.SqlClient;
+using MFSS.Abstractions;
 using MFSS.Models;
+using static MFSS.Models.MigrationStatus;
 
 namespace MFSS.Services;
 
-public class DestinationDbService
+public class DestinationDbService : IDestinationDbService
 {
     private readonly DestinationDbConfig _config;
     private readonly string _connectionString;
@@ -14,45 +16,47 @@ public class DestinationDbService
         _connectionString = config.ConnectionString;
     }
 
-    public string GetLogTableName(string sourceTableName)
+    public Task<string> GetLogTableNameAsync(string sourceTableName)
     {
         if (_config.SeparateTablesPerSource && !string.IsNullOrEmpty(sourceTableName))
-            return $"MigrationLog_{SanitizeTableName(sourceTableName)}";
-        return "MigrationLog";
+            return Task.FromResult($"MigrationLog_{SanitizeTableName(sourceTableName)}");
+        return Task.FromResult("MigrationLog");
     }
 
-    public List<string> GetAllLogTableNames(List<SourceTableConfig> sourceTables)
+    public Task<List<string>> GetAllLogTableNamesAsync(List<SourceTableConfig> sourceTables)
     {
         if (!_config.SeparateTablesPerSource)
-            return new List<string> { "MigrationLog" };
+            return Task.FromResult(new List<string> { "MigrationLog" });
 
-        return sourceTables
-            .Select(t => GetLogTableName(t.TableName))
+        return Task.FromResult(sourceTables
+            .Select(t => $"MigrationLog_{SanitizeTableName(t.TableName)}")
             .Distinct()
-            .ToList();
+            .ToList());
     }
 
-    public bool TableExists(string tableName)
+    public async Task<bool> TableExistsAsync(string tableName)
     {
         using var conn = new SqlConnection(_connectionString);
-        conn.Open();
+        await conn.OpenAsync();
         using var cmd = new SqlCommand(
             @"SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = @tableName", conn);
         cmd.Parameters.AddWithValue("@tableName", tableName);
-        return Convert.ToInt32(cmd.ExecuteScalar()) > 0;
+        return Convert.ToInt32(await cmd.ExecuteScalarAsync()) > 0;
     }
 
-    public bool AllTablesExist(List<SourceTableConfig> sourceTables)
+    public async Task<bool> AllTablesExistAsync(List<SourceTableConfig> sourceTables)
     {
-        var tableNames = GetAllLogTableNames(sourceTables);
-        return tableNames.All(TableExists);
+        var tableNames = await GetAllLogTableNamesAsync(sourceTables);
+        foreach (var name in tableNames)
+            if (!await TableExistsAsync(name)) return false;
+        return true;
     }
 
-    public void CreateAllTables(List<SourceTableConfig> sourceTables)
+    public async Task CreateAllTablesAsync(List<SourceTableConfig> sourceTables)
     {
-        var tableNames = GetAllLogTableNames(sourceTables);
+        var tableNames = await GetAllLogTableNamesAsync(sourceTables);
         using var conn = new SqlConnection(_connectionString);
-        conn.Open();
+        await conn.OpenAsync();
         foreach (var tableName in tableNames)
         {
             var sql = $@"
@@ -71,35 +75,36 @@ public class DestinationDbService
                     CONSTRAINT [PK_{tableName}] PRIMARY KEY ([Id], [SourceTable])
                 )";
             using var cmd = new SqlCommand(sql, conn);
-            cmd.ExecuteNonQuery();
+            await cmd.ExecuteNonQueryAsync();
         }
     }
 
-    public void DropAllTables(List<SourceTableConfig> sourceTables)
+    public async Task DropAllTablesAsync(List<SourceTableConfig> sourceTables)
     {
-        var tableNames = GetAllLogTableNames(sourceTables);
+        var tableNames = await GetAllLogTableNamesAsync(sourceTables);
         using var conn = new SqlConnection(_connectionString);
-        conn.Open();
+        await conn.OpenAsync();
         foreach (var tableName in tableNames)
         {
-            using var cmd = new SqlCommand($"IF OBJECT_ID('{tableName}', 'U') IS NOT NULL DROP TABLE [{tableName}]", conn);
-            cmd.ExecuteNonQuery();
+            var safeName = SanitizeTableName(tableName);
+            using var cmd = new SqlCommand($"IF OBJECT_ID('{safeName}', 'U') IS NOT NULL DROP TABLE [{safeName}]", conn);
+            await cmd.ExecuteNonQueryAsync();
         }
     }
 
-    public int InsertBatch(List<MediaRecord> records)
+    public async Task<int> InsertBatchAsync(List<MediaRecord> records)
     {
         int inserted = 0;
         using var conn = new SqlConnection(_connectionString);
-        conn.Open();
+        await conn.OpenAsync();
         foreach (var record in records)
         {
-            var tableName = GetLogTableName(record.SourceTable);
+            var tableName = await GetLogTableNameAsync(record.SourceTable);
             var sql = $@"
                 IF NOT EXISTS (SELECT 1 FROM [{tableName}] WHERE [Id] = @Id AND [SourceTable] = @SourceTable)
                 BEGIN
                     INSERT INTO [{tableName}] ([Id], [SourceTable], [SourceUrl], [Status])
-                    VALUES (@Id, @SourceTable, @SourceUrl, 'pending');
+                    VALUES (@Id, @SourceTable, @SourceUrl, '{Pending}');
                     SET @Inserted = 1;
                 END
                 ELSE
@@ -114,48 +119,48 @@ public class DestinationDbService
             cmd.Parameters.AddWithValue("@SourceUrl", record.SourceUrl);
             var insertedParam = new SqlParameter("@Inserted", System.Data.SqlDbType.Int) { Direction = System.Data.ParameterDirection.Output };
             cmd.Parameters.Add(insertedParam);
-            cmd.ExecuteNonQuery();
+            await cmd.ExecuteNonQueryAsync();
             inserted += Convert.ToInt32(insertedParam.Value);
         }
         return inserted;
     }
 
-    public int DetectAndResetUrlChanges(List<MediaRecord> records)
+    public async Task<int> DetectAndResetUrlChangesAsync(List<MediaRecord> records)
     {
         int resets = 0;
         using var conn = new SqlConnection(_connectionString);
-        conn.Open();
+        await conn.OpenAsync();
         foreach (var record in records)
         {
-            var tableName = GetLogTableName(record.SourceTable);
+            var tableName = await GetLogTableNameAsync(record.SourceTable);
             var sql = $@"
                 UPDATE [{tableName}]
-                SET [Status] = 'pending', [DestinationUrl] = NULL, [UpdatedAt] = GETUTCDATE()
-                WHERE [Id] = @Id AND [SourceTable] = @SourceTable
-                  AND [SourceUrl] != @SourceUrl AND [Status] = 'success'";
+                SET [Status] = '{Pending}', [DestinationUrl] = NULL, [UpdatedAt] = GETUTCDATE()
+                  WHERE [Id] = @Id AND [SourceTable] = @SourceTable
+                  AND [SourceUrl] != @SourceUrl AND [Status] = '{Success}'";
             using var cmd = new SqlCommand(sql, conn);
             cmd.Parameters.AddWithValue("@Id", record.Id);
             cmd.Parameters.AddWithValue("@SourceTable", record.SourceTable);
             cmd.Parameters.AddWithValue("@SourceUrl", record.SourceUrl);
-            resets += cmd.ExecuteNonQuery();
+            resets += await cmd.ExecuteNonQueryAsync();
         }
         return resets;
     }
 
-    public List<MediaRecord> GetAllPendingRecords(List<SourceTableConfig> sourceTables, int maxRetries)
+    public async Task<List<MediaRecord>> GetAllPendingRecordsAsync(List<SourceTableConfig> sourceTables, int maxRetries)
     {
         var results = new List<MediaRecord>();
         using var conn = new SqlConnection(_connectionString);
-        conn.Open();
-        var tableNames = GetAllLogTableNames(sourceTables);
+        await conn.OpenAsync();
+        var tableNames = await GetAllLogTableNamesAsync(sourceTables);
         foreach (var tableName in tableNames)
         {
             var sql = $@"SELECT [Id], [SourceTable], [SourceUrl] FROM [{tableName}]
-                         WHERE [Status] = 'pending' AND [RetryCount] < @MaxRetries";
+                         WHERE [Status] = '{Pending}' AND [RetryCount] < @MaxRetries";
             using var cmd = new SqlCommand(sql, conn);
             cmd.Parameters.AddWithValue("@MaxRetries", maxRetries);
-            using var reader = cmd.ExecuteReader();
-            while (reader.Read())
+            using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
             {
                 results.Add(new MediaRecord
                 {
@@ -168,19 +173,19 @@ public class DestinationDbService
         return results;
     }
 
-    public (long Id, string? DestinationUrl, long? FileSize)? FindExistingByHash(string hash, List<SourceTableConfig> sourceTables)
+    public async Task<(long Id, string? DestinationUrl, long? FileSize)?> FindExistingByHashAsync(string hash, List<SourceTableConfig> sourceTables)
     {
         using var conn = new SqlConnection(_connectionString);
-        conn.Open();
-        var tableNames = GetAllLogTableNames(sourceTables);
+        await conn.OpenAsync();
+        var tableNames = await GetAllLogTableNamesAsync(sourceTables);
         foreach (var tableName in tableNames)
         {
             var sql = $@"SELECT TOP 1 [Id], [DestinationUrl], [FileSize] FROM [{tableName}]
-                         WHERE [FileHash] = @Hash AND [Status] = 'success'";
+                         WHERE [FileHash] = @Hash AND [Status] = '{Success}'";
             using var cmd = new SqlCommand(sql, conn);
             cmd.Parameters.AddWithValue("@Hash", hash);
-            using var reader = cmd.ExecuteReader();
-            if (reader.Read())
+            using var reader = await cmd.ExecuteReaderAsync();
+            if (await reader.ReadAsync())
             {
                 return (reader.GetInt64(0),
                         reader.IsDBNull(1) ? null : reader.GetString(1),
@@ -190,13 +195,13 @@ public class DestinationDbService
         return null;
     }
 
-    public void MarkSuccess(long id, string sourceTable, string destinationUrl, long fileSize, string hash)
+    public async Task MarkSuccessAsync(long id, string sourceTable, string destinationUrl, long fileSize, string hash)
     {
-        var tableName = GetLogTableName(sourceTable);
+        var tableName = await GetLogTableNameAsync(sourceTable);
         using var conn = new SqlConnection(_connectionString);
-        conn.Open();
+        await conn.OpenAsync();
         var sql = $@"UPDATE [{tableName}]
-                     SET [Status] = 'success', [DestinationUrl] = @DestUrl, [FileSize] = @Size,
+                     SET [Status] = '{Success}', [DestinationUrl] = @DestUrl, [FileSize] = @Size,
                          [FileHash] = @Hash, [UpdatedAt] = GETUTCDATE()
                      WHERE [Id] = @Id AND [SourceTable] = @SourceTable";
         using var cmd = new SqlCommand(sql, conn);
@@ -205,37 +210,37 @@ public class DestinationDbService
         cmd.Parameters.AddWithValue("@DestUrl", destinationUrl);
         cmd.Parameters.AddWithValue("@Size", fileSize);
         cmd.Parameters.AddWithValue("@Hash", hash);
-        cmd.ExecuteNonQuery();
+        await cmd.ExecuteNonQueryAsync();
     }
 
-    public void MarkFailed(long id, string sourceTable, string errorMessage, int retryCount)
+    public async Task MarkFailedAsync(long id, string sourceTable, string errorMessage, int retryCount)
     {
-        var tableName = GetLogTableName(sourceTable);
+        var tableName = await GetLogTableNameAsync(sourceTable);
         using var conn = new SqlConnection(_connectionString);
-        conn.Open();
+        await conn.OpenAsync();
         var sql = $@"UPDATE [{tableName}]
-                     SET [Status] = 'failed', [ErrorMessage] = @Error, [RetryCount] = @Retries, [UpdatedAt] = GETUTCDATE()
+                     SET [Status] = '{Failed}', [ErrorMessage] = @Error, [RetryCount] = @Retries, [UpdatedAt] = GETUTCDATE()
                      WHERE [Id] = @Id AND [SourceTable] = @SourceTable";
         using var cmd = new SqlCommand(sql, conn);
         cmd.Parameters.AddWithValue("@Id", id);
         cmd.Parameters.AddWithValue("@SourceTable", sourceTable);
         cmd.Parameters.AddWithValue("@Error", errorMessage);
         cmd.Parameters.AddWithValue("@Retries", retryCount);
-        cmd.ExecuteNonQuery();
+        await cmd.ExecuteNonQueryAsync();
     }
 
-    public List<(long Id, string Url)> GetSuccessRecords(List<SourceTableConfig> sourceTables)
+    public async Task<List<(long Id, string Url)>> GetSuccessRecordsAsync(List<SourceTableConfig> sourceTables)
     {
         var results = new List<(long, string)>();
         using var conn = new SqlConnection(_connectionString);
-        conn.Open();
-        var tableNames = GetAllLogTableNames(sourceTables);
+        await conn.OpenAsync();
+        var tableNames = await GetAllLogTableNamesAsync(sourceTables);
         foreach (var tableName in tableNames)
         {
-            var sql = $@"SELECT [Id], [DestinationUrl] FROM [{tableName}] WHERE [Status] = 'success'";
+            var sql = $@"SELECT [Id], [DestinationUrl] FROM [{tableName}] WHERE [Status] = '{Success}'";
             using var cmd = new SqlCommand(sql, conn);
-            using var reader = cmd.ExecuteReader();
-            while (reader.Read())
+            using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
             {
                 if (!reader.IsDBNull(1))
                     results.Add((reader.GetInt64(0), reader.GetString(1)));
@@ -244,18 +249,18 @@ public class DestinationDbService
         return results;
     }
 
-    public Dictionary<string, int> GetSummary(List<SourceTableConfig> sourceTables)
+    public async Task<Dictionary<string, int>> GetSummaryAsync(List<SourceTableConfig> sourceTables)
     {
         var summary = new Dictionary<string, int>();
         using var conn = new SqlConnection(_connectionString);
-        conn.Open();
-        var tableNames = GetAllLogTableNames(sourceTables);
+        await conn.OpenAsync();
+        var tableNames = await GetAllLogTableNamesAsync(sourceTables);
         foreach (var tableName in tableNames)
         {
             var sql = $@"SELECT [Status], COUNT(*) FROM [{tableName}] GROUP BY [Status]";
             using var cmd = new SqlCommand(sql, conn);
-            using var reader = cmd.ExecuteReader();
-            while (reader.Read())
+            using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
             {
                 var status = reader.GetString(0);
                 var count = reader.GetInt32(1);

@@ -60,12 +60,11 @@ public class CircuitBreakerTests
     }
 
     [Fact]
-    public void IsThreadSafe_ConcurrentAccess()
+    public async Task IsThreadSafe_ConcurrentAccess()
     {
         using var log = CreateTestLogger();
         var breaker = new CircuitBreaker(100, TimeSpan.FromSeconds(30), log);
 
-        // Run concurrent failures - should not throw
         var tasks = Enumerable.Range(0, 200).Select(_ =>
             Task.Run(() =>
             {
@@ -74,8 +73,6 @@ public class CircuitBreakerTests
                 breaker.RecordSuccess();
             }));
 
-        Task.WhenAll(tasks).Wait();
-        // If we get here without exceptions, thread safety is working
-        Assert.True(true);
+        await Task.WhenAll(tasks);
     }
 }

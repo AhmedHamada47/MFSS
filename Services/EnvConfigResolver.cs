@@ -1,14 +1,11 @@
+using MFSS.Abstractions;
 using MFSS.Models;
 
 namespace MFSS.Services;
 
-public static class EnvConfigResolver
+public class EnvConfigResolver : IEnvConfigResolver
 {
-    /// <summary>
-    /// Resolves environment variable placeholders in connection strings and paths.
-    /// Placeholders use the format: ${ENV_VAR_NAME}
-    /// </summary>
-    public static void ResolveAll(SourceDbConfig sourceDb, DestinationDbConfig destDb, ThirdDbConfig thirdDb, FileSystemConfig srcFs, FileSystemConfig destFs)
+    public void ResolveAll(SourceDbConfig sourceDb, DestinationDbConfig destDb, ThirdDbConfig thirdDb, FileSystemConfig srcFs, FileSystemConfig destFs)
     {
         sourceDb.ConnectionString = Resolve(sourceDb.ConnectionString);
         destDb.ConnectionString = Resolve(destDb.ConnectionString);
@@ -24,6 +21,7 @@ public static class EnvConfigResolver
         destFs.BasePath = Resolve(destFs.BasePath);
         destFs.AccessKey = Resolve(destFs.AccessKey);
         destFs.SecretKey = Resolve(destFs.SecretKey);
+        destFs.Endpoint = Resolve(destFs.Endpoint);
         destFs.AzureConnectionString = Resolve(destFs.AzureConnectionString);
         destFs.ContainerName = Resolve(destFs.ContainerName);
         destFs.GcsCredentialPath = Resolve(destFs.GcsCredentialPath);

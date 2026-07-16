@@ -1,53 +1,126 @@
-name: Build & Test
+name: Build, Test & Deploy
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [main, master]
+    tags: ["v*"]
   pull_request:
-    branches: [ main, master ]
+    branches: [main, master]
+  workflow_dispatch:
 
 permissions:
   contents: read
+  actions: read
+  checks: write
+
+env:
+  DOTNET_VERSION: "9.0.x"
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
 
 jobs:
-  build:
+  lint:
+    name: Code Quality
     runs-on: ubuntu-latest
-
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      - name: Restore
+        run: dotnet restore
+      - name: Build
+        run: dotnet build --no-restore -c Release
+      - name: Run code analysis
+        run: dotnet build -c Release /p:RunAnalyzersDuringBuild=true /p:RunAnalyzers=true
 
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: '8.0.x'
+  test:
+    name: Tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      - name: Restore
+        run: dotnet restore
+      - name: Build
+        run: dotnet build --no-restore -c Release
+      - name: Start LocalDB (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          SqlLocalDB start "MSSQLLocalDB" -s
+          SqlLocalDB info "MSSQLLocalDB"
+      - name: Test unit tests (all OS)
+        run: |
+          dotnet test MFSS.Tests/ --no-build -c Release `
+            --verbosity normal `
+            --filter "Category!=Integration" `
+            --collect:"XPlat Code Coverage" `
+            --results-directory ./coverage-unit
+      - name: Test integration tests (Windows only)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          dotnet test MFSS.Tests/ --no-build -c Release `
+            --verbosity normal `
+            --filter "Category=Integration" `
+            --collect:"XPlat Code Coverage" `
+            --results-directory ./coverage-integration
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.os }}
+          path: ./coverage-*
 
-    - name: Restore dependencies
-      run: dotnet restore
-
-    - name: Build
-      run: dotnet build --no-restore -c Release
-
-    - name: Run tests
-      run: dotnet test MFSS.Tests/ --no-build -c Release --verbosity normal
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      - name: Restore
+        run: dotnet restore
+      - name: Run NuGet vulnerability audit
+        run: dotnet list package --vulnerable --outdated
+      - name: Run .NET security analyzer
+        run: |
+          dotnet tool install -g SecurityCodeScan
+          dotnet restore
+          dotnet build -c Release
 
   pack:
+    name: Pack and Publish
     runs-on: ubuntu-latest
-    needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-
+    needs: [lint, test, security]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+      - name: Pack NuGet tool
+        run: dotnet pack -c Release -o ./nupkg
+      - name: Upload NuGet package
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-package
+          path: ./nupkg/*.nupkg
+      - name: Publish to NuGet
+        if: env.NUGET_API_KEY != ''
+        run: |
+          dotnet nuget push ./nupkg/*.nupkg `
+            --api-key ${{ secrets.NUGET_API_KEY }} `
+            --source https://api.nuget.org/v3/index.json
 
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: '8.0.x'
 
-    - name: Pack NuGet tool
-      run: dotnet pack -c Release -o ./nupkg
-
-    - name: Upload NuGet package artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: nuget-package
-        path: ./nupkg/*.nupkg

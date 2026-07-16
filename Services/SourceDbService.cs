@@ -1,9 +1,10 @@
 using Microsoft.Data.SqlClient;
+using MFSS.Abstractions;
 using MFSS.Models;
 
 namespace MFSS.Services;
 
-public class SourceDbService
+public class SourceDbService : ISourceDbService
 {
     private readonly SourceDbConfig _config;
 
@@ -12,21 +13,16 @@ public class SourceDbService
         _config = config;
     }
 
-    /// <summary>
-    /// Fetches records from all configured source tables.
-    /// Each record includes the SourceTable name so it can be routed to the correct log table.
-    /// </summary>
-    public List<MediaRecord> FetchRecords()
+    public async Task<IReadOnlyList<MediaRecord>> FetchRecordsAsync(CancellationToken ct = default)
     {
         var results = new List<MediaRecord>();
         var tables = _config.GetEffectiveTables();
 
         using var conn = new SqlConnection(_config.ConnectionString);
-        conn.Open();
+        await conn.OpenAsync(ct);
 
         foreach (var table in tables)
         {
-            // Validate table/column names to prevent SQL injection (only allow alphanumeric + underscore)
             ValidateName(table.TableName);
             ValidateName(table.IdColumn);
             ValidateName(table.UrlColumn);
@@ -36,9 +32,9 @@ public class SourceDbService
                          WHERE [{table.UrlColumn}] IS NOT NULL AND [{table.UrlColumn}] != ''";
 
             using var cmd = new SqlCommand(sql, conn);
-            using var reader = cmd.ExecuteReader();
+            using var reader = await cmd.ExecuteReaderAsync(ct);
 
-            while (reader.Read())
+            while (await reader.ReadAsync(ct))
             {
                 results.Add(new MediaRecord
                 {

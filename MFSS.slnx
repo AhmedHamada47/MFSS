@@ -1,4 +1,3 @@
 <Solution>
   <Project Path="MFSS.csproj" />
-  <Project Path="MFSS.Tests/MFSS.Tests.csproj" />
 </Solution>

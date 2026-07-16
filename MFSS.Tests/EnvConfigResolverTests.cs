@@ -22,7 +22,7 @@ public class EnvConfigResolverTests
             var srcFs = new FileSystemConfig();
             var destFs = new FileSystemConfig();
 
-            EnvConfigResolver.ResolveAll(sourceDb, destDb, thirdDb, srcFs, destFs);
+            new EnvConfigResolver().ResolveAll(sourceDb, destDb, thirdDb, srcFs, destFs);
 
             Assert.Equal("Server=myhost.com;User=admin;", sourceDb.ConnectionString);
         }
@@ -45,7 +45,7 @@ public class EnvConfigResolverTests
         var srcFs = new FileSystemConfig();
         var destFs = new FileSystemConfig();
 
-        EnvConfigResolver.ResolveAll(sourceDb, destDb, thirdDb, srcFs, destFs);
+        new EnvConfigResolver().ResolveAll(sourceDb, destDb, thirdDb, srcFs, destFs);
 
         Assert.Equal("Server=${NONEXISTENT_VAR_12345};", sourceDb.ConnectionString);
     }
@@ -59,7 +59,7 @@ public class EnvConfigResolverTests
         var srcFs = new FileSystemConfig();
         var destFs = new FileSystemConfig();
 
-        EnvConfigResolver.ResolveAll(sourceDb, destDb, thirdDb, srcFs, destFs);
+        new EnvConfigResolver().ResolveAll(sourceDb, destDb, thirdDb, srcFs, destFs);
 
         Assert.Equal("", sourceDb.ConnectionString);
     }
@@ -77,7 +77,7 @@ public class EnvConfigResolverTests
             var srcFs = new FileSystemConfig();
             var destFs = new FileSystemConfig { AccessKey = "${TEST_AWS_KEY}", SecretKey = "plain-value" };
 
-            EnvConfigResolver.ResolveAll(sourceDb, destDb, thirdDb, srcFs, destFs);
+            new EnvConfigResolver().ResolveAll(sourceDb, destDb, thirdDb, srcFs, destFs);
 
             Assert.Equal("AKIA12345", destFs.AccessKey);
             Assert.Equal("plain-value", destFs.SecretKey);

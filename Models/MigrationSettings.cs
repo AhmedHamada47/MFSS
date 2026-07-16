@@ -10,4 +10,6 @@ public class MigrationSettings
     public int MaxRetries { get; set; } = 3;
     public int RateLimitPerSecond { get; set; } = 10;
     public int MaxFileSizeMB { get; set; } = 100;
+    public int CircuitBreakerThreshold { get; set; } = 50;
+    public int CircuitBreakerTimeoutSeconds { get; set; } = 60;
 }

@@ -1,40 +1,36 @@
 using Microsoft.Data.SqlClient;
+using MFSS.Abstractions;
 using MFSS.Models;
 
 namespace MFSS.Services;
 
-/// <summary>
-/// Updates a third-party database with new file URLs after successful migration.
-/// Uses atomic transactions — either all updates succeed or none are applied.
-/// </summary>
-public class ThirdDbService
+public class ThirdDbService : IThirdDbService
 {
     private readonly ThirdDbConfig _config;
-    private readonly Logger _log;
+    private readonly ILogger _log;
 
-    public ThirdDbService(ThirdDbConfig config, Logger log)
+    public ThirdDbService(ThirdDbConfig config, ILogger log)
     {
         _config = config;
         _log = log;
     }
 
-    /// <summary>
-    /// Updates records in the third-party database within a single transaction.
-    /// If any update fails, the entire transaction is rolled back.
-    /// Returns the count of successful and failed updates.
-    /// </summary>
-    public (int Success, int Failed) UpdateWithTransaction(List<(long Id, string Url)> records)
+    public async Task<(int Success, int Failed)> UpdateWithTransactionAsync(List<(long Id, string Url)> records, CancellationToken ct = default)
     {
+        if (records.Count == 0)
+            return (0, 0);
+
         int success = 0, failed = 0;
 
         using var conn = new SqlConnection(_config.ConnectionString);
-        conn.Open();
+        await conn.OpenAsync(ct);
         using var transaction = conn.BeginTransaction();
 
         try
         {
             foreach (var (id, url) in records)
             {
+                ct.ThrowIfCancellationRequested();
                 try
                 {
                     var sql = _config.UpdateQuery
@@ -44,29 +40,28 @@ public class ThirdDbService
                     using var cmd = new SqlCommand(sql, conn, transaction);
                     cmd.Parameters.AddWithValue("@id", id);
                     cmd.Parameters.AddWithValue("@url", url);
-                    cmd.ExecuteNonQuery();
+                    await cmd.ExecuteNonQueryAsync(ct);
                     success++;
                 }
-                catch (Exception ex)
+                catch (Exception ex) when (ex is not OperationCanceledException)
                 {
-                    _log.Error($"  ❌ Third DB update failed for id={id}: {ex.Message}");
+                    _log.Error($"  Third DB update failed for id={id}: {ex.Message}");
                     failed++;
-                    // Roll back entire transaction on any failure for data consistency
                     transaction.Rollback();
-                    _log.Warning($"  ⚠️ Transaction rolled back due to failure. {success} previously successful updates were reverted.");
+                    _log.Warning($"  Transaction rolled back due to failure. {success} previously successful updates were reverted.");
                     return (0, failed + success);
                 }
             }
 
             transaction.Commit();
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            _log.Error($"  ❌ Transaction commit failed: {ex.Message}");
+            _log.Error($"  Transaction commit failed: {ex.Message}");
             try { transaction.Rollback(); }
             catch (Exception rollbackEx)
             {
-                _log.Error($"  ❌ Rollback also failed: {rollbackEx.Message}");
+                _log.Error($"  Rollback also failed: {rollbackEx.Message}");
             }
             return (0, records.Count);
         }
