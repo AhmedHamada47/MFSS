@@ -361,6 +361,7 @@
   </div>
   <nav>
     <a href="#features">Features</a>
+    <a href="#workflows">Workflows</a>
     <a href="#quickstart">Quick Start</a>
     <a href="#cli">CLI</a>
     <a href="#providers">Providers</a>
@@ -372,6 +373,7 @@
 </nav>
 <div class="navbar-mobile" id="mobileNav">
   <a href="#features" onclick="this.closest('.navbar-mobile').classList.remove('open')">Features</a>
+  <a href="#workflows" onclick="this.closest('.navbar-mobile').classList.remove('open')">Workflows</a>
   <a href="#quickstart" onclick="this.closest('.navbar-mobile').classList.remove('open')">Quick Start</a>
   <a href="#cli" onclick="this.closest('.navbar-mobile').classList.remove('open')">CLI</a>
   <a href="#providers" onclick="this.closest('.navbar-mobile').classList.remove('open')">Providers</a>
@@ -422,6 +424,239 @@
     <div class="feature-card"><span class="emoji">&#128274;</span><h4>Secret-Safe by Default</h4><p>Use <code>${ENV_VAR}</code> placeholders for credentials. Connection strings are masked in logs. No secrets in config files.</p></div>
     <div class="feature-card"><span class="emoji">&#128259;</span><h4>URL Change Detection</h4><p>If a source URL changes for a previously migrated file, it's automatically reset for re-migration.</p></div>
   </div>
+</section>
+
+<!-- Usage Workflows -->
+<section id="workflows">
+  <div class="section-header">
+    <div class="section-tag">Two Ways to Use</div>
+    <h2>Usage Workflows</h2>
+    <p>Choose the path that fits your workflow — CLI global tool or NuGet package in VS Code.</p>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:32px;">
+    <div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius);padding:28px;">
+      <div style="font-size:36px;margin-bottom:8px;">&#9001;</div>
+      <h3 style="font-size:20px;font-weight:700;color:var(--text-heading);margin-bottom:4px;">CLI Global Tool</h3>
+      <p style="color:var(--text-muted);font-size:13px;margin-bottom:16px;">For developers who prefer the command line. Install once, run anywhere.</p>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;">
+        <span class="tech-item">dotnet tool</span>
+        <span class="tech-item">Terminal</span>
+        <span class="tech-item">Cross-platform</span>
+        <span class="tech-item">Scriptable</span>
+      </div>
+    </div>
+    <div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius);padding:28px;">
+      <div style="font-size:36px;margin-bottom:8px;">&#9001;</div>
+      <h3 style="font-size:20px;font-weight:700;color:var(--text-heading);margin-bottom:4px;">VS Code / NuGet Package</h3>
+      <p style="color:var(--text-muted);font-size:13px;margin-bottom:16px;">For developers working inside Visual Studio or VS Code with NuGet Package Manager.</p>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;">
+        <span class="tech-item">NuGet PM</span>
+        <span class="tech-item">VS Code</span>
+        <span class="tech-item">Visual Studio</span>
+        <span class="tech-item">Rider</span>
+      </div>
+    </div>
+  </div>
+
+  <h3 style="font-size:18px;margin:32px 0 16px;">&#9001; Workflow A: Install as CLI Global Tool</h3>
+  <p style="color:var(--text-muted);font-size:14px;margin-bottom:16px;">Best for: Automation, CI/CD pipelines, server environments, and developers who live in the terminal.</p>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <h4>Install the .NET SDK</h4>
+        <p>Download and install the .NET 9 SDK from <a href="https://dotnet.microsoft.com/download/dotnet/9.0" target="_blank">dotnet.microsoft.com</a>. Verify it's installed:</p>
+        <div class="code-block" style="margin-top:8px;">
+          <pre><code>dotnet --version</code></pre>
+          <span class="lang-tag">bash</span>
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        </div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <h4>Install MFSS as a global tool</h4>
+        <p>NuGet will download and install the latest version from <a href="https://www.nuget.org/packages/MFSS" target="_blank">nuget.org</a>:</p>
+        <div class="code-block" style="margin-top:8px;">
+          <pre><code>dotnet tool install --global MFSS</code></pre>
+          <span class="lang-tag">bash</span>
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        </div>
+        <p style="margin-top:8px;font-size:13px;">To update later: <code style="font-size:12px;">dotnet tool update --global MFSS</code></p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <h4>Verify installation</h4>
+        <p>The tool is now available as the <code>mfss</code> command in your terminal:</p>
+        <div class="code-block" style="margin-top:8px;">
+          <pre><code>mfss --version
+mfss --help</code></pre>
+          <span class="lang-tag">bash</span>
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        </div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-body">
+        <h4>Create your configuration file</h4>
+        <p>Create <code>appsettings.json</code> with your source DB, storage providers, and migration settings:</p>
+        <div class="code-block" style="margin-top:8px;">
+          <pre><code>{
+  <span class="hl-str">"Migration"</span>: { <span class="hl-str">"Name"</span>: <span class="hl-str">"my-migration"</span>, <span class="hl-str">"ParallelDownloads"</span>: <span class="hl-num">4</span> },
+  <span class="hl-str">"SourceDb"</span>: {
+    <span class="hl-str">"ConnectionString"</span>: <span class="hl-str">"Server=localhost;Database=source;Integrated Security=true;"</span>,
+    <span class="hl-str">"Tables"</span>: [{ <span class="hl-str">"TableName"</span>: <span class="hl-str">"MediaFiles"</span>, <span class="hl-str">"UrlColumn"</span>: <span class="hl-str">"Url"</span> }]
+  },
+  <span class="hl-str">"SourceFileSystem"</span>: { <span class="hl-str">"Type"</span>: <span class="hl-str">"local"</span>, <span class="hl-str">"BasePath"</span>: <span class="hl-str">"/data/files"</span> },
+  <span class="hl-str">"DestinationFileSystem"</span>: {
+    <span class="hl-str">"Type"</span>: <span class="hl-str">"s3"</span>,
+    <span class="hl-str">"BucketName"</span>: <span class="hl-str">"my-bucket"</span>,
+    <span class="hl-str">"Endpoint"</span>: <span class="hl-str">"https://s3.amazonaws.com"</span>,
+    <span class="hl-str">"AccessKey"</span>: <span class="hl-str">"${AWS_ACCESS_KEY}"</span>,
+    <span class="hl-str">"SecretKey"</span>: <span class="hl-str">"${AWS_SECRET_KEY}"</span>
+  },
+  <span class="hl-str">"DestinationDb"</span>: { <span class="hl-str">"ConnectionString"</span>: <span class="hl-str">"Server=localhost;Database=migration_log;Integrated Security=true;"</span> }
+}</code></pre>
+          <span class="lang-tag">json</span>
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        </div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">5</div>
+      <div class="step-body">
+        <h4>Run a dry-run to validate</h4>
+        <p>Preview the migration without touching any files or databases:</p>
+        <div class="code-block" style="margin-top:8px;">
+          <pre><code>mfss --dry-run --mode migrate --config appsettings.json</code></pre>
+          <span class="lang-tag">bash</span>
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        </div>
+        <p style="margin-top:8px;font-size:13px;">Add <code>--verbose</code> to see every file that would be transferred.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">6</div>
+      <div class="step-body">
+        <h4>Execute the migration</h4>
+        <p>Run the actual migration. Files will be transferred in parallel with progress tracking:</p>
+        <div class="code-block" style="margin-top:8px;">
+          <pre><code>mfss --mode migrate --config appsettings.json</code></pre>
+          <span class="lang-tag">bash</span>
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        </div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">7</div>
+      <div class="step-body">
+        <h4>Rollback if needed</h4>
+        <p>If something goes wrong, rollback all migrated files:</p>
+        <div class="code-block" style="margin-top:8px;">
+          <pre><code><span style="color:var(--text-muted)"># Preview rollback first</span>
+mfss --dry-run --mode rollback --config appsettings.json
+
+<span style="color:var(--text-muted)"># Execute rollback</span>
+mfss --mode rollback --config appsettings.json</code></pre>
+          <span class="lang-tag">bash</span>
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <hr style="border:none;border-top:1px solid var(--border);margin:48px 0;">
+
+  <h3 style="font-size:18px;margin:32px 0 16px;">&#9001; Workflow B: Use via VS Code / NuGet Package Manager</h3>
+  <p style="color:var(--text-muted);font-size:14px;margin-bottom:16px;">Best for: .NET developers who want to integrate MFSS as a project dependency, build custom tooling on top of it, or prefer GUI package management.</p>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <h4>Open your project in VS Code</h4>
+        <p>Open your .NET project (or create a new one) where you want to reference the MFSS package.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <h4>Open NuGet Package Manager</h4>
+        <p>In VS Code, press <kbd>Ctrl+Shift+P</kbd> to open the command palette, then type <strong>NuGet Package Manager</strong> and select it. Or right-click the <code>Dependencies</code> node in the Solution Explorer and choose <strong>Manage NuGet Packages</strong>.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <h4>Search for "MFSS"</h4>
+        <p>In the NuGet Package Manager, click <strong>Browse</strong> tab and search for <code>MFSS</code>. Select it from the list.</p>
+        <div style="background:var(--bg-code);border:1px solid var(--border);border-radius:8px;padding:16px;margin-top:8px;">
+          <p style="font-size:13px;color:var(--text-muted);margin:0;">
+            <span style="color:var(--accent);font-weight:600;">Alternative:</span> Install via the .NET CLI by adding a package reference to your project:
+          </p>
+          <div class="code-block">
+            <pre><code>dotnet add package MFSS --version 1.0.2</code></pre>
+            <span class="lang-tag">bash</span>
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-body">
+        <h4>Install the package</h4>
+        <p>Click the <strong>Install</strong> button next to the MFSS package. VS Code will add a package reference to your <code>.csproj</code> file:</p>
+        <div class="code-block" style="margin-top:8px;">
+          <pre><code><span class="hl-com">&lt;!-- Added to your .csproj file --&gt;</span>
+&lt;<span class="hl-kw">PackageReference</span> <span class="hl-prop">Include</span>=<span class="hl-str">"MFSS"</span> <span class="hl-prop">Version</span>=<span class="hl-str">"1.0.2"</span> /&gt;</code></pre>
+          <span class="lang-tag">xml</span>
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        </div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">5</div>
+      <div class="step-body">
+        <h4>Run MFSS from your project</h4>
+        <p>If installed as a tool reference, run with <code>dotnet tool run mfss</code>. If installed as a library reference, use the MFSS classes and services in your own code:</p>
+        <div class="code-block" style="margin-top:8px;">
+          <pre><code><span class="hl-com">// Use MFSS services in your own .NET application</span>
+<span class="hl-kw">using</span> <span class="hl-type">MFSS.Services</span>;
+<span class="hl-kw">using</span> <span class="hl-type">MFSS.Models</span>;
+
+<span class="hl-kw">var</span> config = <span class="hl-kw">new</span> <span class="hl-type">MigrationSettings</span> { <span class="hl-prop">Name</span> = <span class="hl-str">"my-migration"</span>, <span class="hl-prop">ParallelDownloads</span> = <span class="hl-num">4</span> };
+<span class="hl-kw">var</span> orchestrator = <span class="hl-kw">new</span> <span class="hl-type">MigrationOrchestrator</span>(...);
+<span class="hl-kw">var</span> exitCode = <span class="hl-kw">await</span> <span class="hl-built">orchestrator</span>.<span class="hl-built">RunAsync</span>();</code></pre>
+          <span class="lang-tag">csharp</span>
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        </div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">6</div>
+      <div class="step-body">
+        <h4>Create and run a migration</h4>
+        <p>Write a migration script or use the built-in CLI by calling the MFSS entry point from your project's build output:</p>
+        <div class="code-block" style="margin-top:8px;">
+          <pre><code><span style="color:var(--text-muted)"># Run via dotnet tool (if installed as local tool)</span>
+dotnet tool run mfss -- --mode migrate <span class="hl-op">--</span>config appsettings.json
+
+<span style="color:var(--text-muted)"># Or run the project directly</span>
+dotnet run -- --mode migrate --config appsettings.json</code></pre>
+          <span class="lang-tag">bash</span>
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout callout-tip" style="margin-top:32px;"><strong>&#128161; Which workflow should I choose?</strong> Use the <strong>CLI Global Tool</strong> for running migrations directly from the terminal, automation scripts, and CI/CD pipelines. Use the <strong>NuGet Package</strong> if you want to build custom applications on top of MFSS, extend its functionality, or manage versions through your IDE's package manager.</div>
 </section>
 
 <!-- Quick Start -->
