@@ -4,7 +4,7 @@ namespace MFSS.Tests.Helpers;
 
 public static class TestDatabaseHelper
 {
-    private const string MasterConnectionString = @"Data Source=(localdb)\ProjectModels;Database=master;Integrated Security=True;TrustServerCertificate=True;";
+    private const string MasterConnectionString = @"Data Source=(localdb)\MSSQLLocalDB;Database=master;Integrated Security=True;TrustServerCertificate=True;";
 
     public static string CreateTestDatabase(string testName)
     {
@@ -13,7 +13,7 @@ public static class TestDatabaseHelper
         conn.Open();
         using var cmd = new SqlCommand($"CREATE DATABASE [{dbName}]", conn);
         cmd.ExecuteNonQuery();
-        return $@"Data Source=(localdb)\ProjectModels;Database={dbName};Integrated Security=True;TrustServerCertificate=True;";
+        return $@"Data Source=(localdb)\MSSQLLocalDB;Database={dbName};Integrated Security=True;TrustServerCertificate=True;";
     }
 
     public static void DropTestDatabase(string connectionString)
