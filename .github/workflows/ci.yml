@@ -58,7 +58,18 @@ jobs:
         run: |
           SqlLocalDB start "MSSQLLocalDB" -s
           SqlLocalDB info "MSSQLLocalDB"
-      - name: Test unit tests (all OS)
+      - name: Test unit tests (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          dotnet test MFSS.Tests/ --no-build -c Release `
+            --verbosity normal `
+            --filter "Category!=Integration" `
+            --collect:"XPlat Code Coverage" `
+            --results-directory ./coverage-unit
+      - name: Test unit tests (Ubuntu)
+        if: runner.os == 'Linux'
+        shell: pwsh
         run: |
           dotnet test MFSS.Tests/ --no-build -c Release `
             --verbosity normal `
