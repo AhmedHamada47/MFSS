@@ -24,7 +24,7 @@ public class LoggerTests
     public void LogPath_IsInLogsDirectory()
     {
         using var logger = new Logger("test-path");
-        Assert.Contains("logs", logger.LogPath);t
+        Assert.Contains("logs", logger.LogPath);
     }
 
     [Fact]
